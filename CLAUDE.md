@@ -47,3 +47,9 @@ Single gym owner = the only Supabase Auth user. Any authenticated session is tre
 - Run `npm run lint` and `npm run build` and confirm both pass
 - Check the change against the relevant user story's acceptance criteria in /project-docs/01_PRD.md
 - If a new npm dependency was added, note why nothing already in the repo could cover it
+
+## Phone number handling
+Mobile numbers are normalized (lib/phone.ts's normalizeMobile — digits only, last 10 kept) on every read and write, everywhere a mobile number is matched or stored. This fixes a real bug: exact-string matching meant the same person typing "+91 98765 43210" one day and "9876543210" the next was never recognized as the same member, and fell through to "unrecognized visitor" every time. Migration 0004 is a one-time cleanup of already-stored inconsistent numbers.
+
+## Remembered-device check-in (lib/deviceToken.ts)
+After a successful /join signup or a successful manual mobile-number check-in, the browser gets an opaque random token in a long-lived (~400 day), httpOnly cookie, mapped server-side to that member_id in the device_tokens table (migration 0005). On every future /checkin page load, attemptDeviceCheckIn() tries this cookie first — if it resolves, attendance is logged immediately with zero taps and zero typing, before the mobile-entry form ever shows. Falls back to the normal form for new phones, cleared cookies, or shared devices. Deliberately not tied to biometrics or any new QR/route — same poster, same three QR codes as before.

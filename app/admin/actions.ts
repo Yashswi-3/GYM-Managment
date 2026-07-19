@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { normalizeMobile } from "@/lib/phone";
 
 const memberPaymentSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
@@ -25,6 +26,7 @@ export async function addMemberWithPayment(formData: FormData) {
   const parsed = memberPaymentSchema.safeParse({
     name: formData.get("name"),
     mobile: formData.get("mobile"),
+    email: formData.get("email"),
     planName: formData.get("planName"),
     amount: formData.get("amount"),
     validUntil: formData.get("validUntil"),
@@ -34,7 +36,8 @@ export async function addMemberWithPayment(formData: FormData) {
     return { ok: false, error: parsed.error.issues[0].message };
   }
 
-  const { name, mobile, email, planName, amount, validUntil } = parsed.data;
+  const { name, email, planName, amount, validUntil } = parsed.data;
+  const mobile = normalizeMobile(parsed.data.mobile);
   const supabase = await createClient();
 
   let memberId: string;
@@ -97,7 +100,7 @@ export async function addVisitorManually(formData: FormData) {
   const supabase = await createClient();
   const { error } = await supabase.from("visitors").insert({
     name: parsed.data.name,
-    mobile: parsed.data.mobile,
+    mobile: normalizeMobile(parsed.data.mobile),
     email: parsed.data.email || null,
   });
   if (error) return { ok: false, error: error.message };

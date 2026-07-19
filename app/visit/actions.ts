@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase/server";
+import { normalizeMobile } from "@/lib/phone";
 
 const visitSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
@@ -20,7 +21,8 @@ export async function registerAsVisitor(nameInput: string, mobileInput: string, 
   if (!parsed.success) return { ok: false as const, error: parsed.error.issues[0].message };
 
   const supabase = await createServiceClient();
-  const { name, mobile, email } = parsed.data;
+  const { name, email } = parsed.data;
+  const mobile = normalizeMobile(parsed.data.mobile);
 
   const { data: existingMember } = await supabase
     .from("members")

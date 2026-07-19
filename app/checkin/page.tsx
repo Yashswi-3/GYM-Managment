@@ -1,22 +1,41 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
-import { Dumbbell, CheckCircle2, UserPlus } from "lucide-react";
-import { lookupMobile, checkInMember, registerVisitor } from "./actions";
+import { Dumbbell, CheckCircle2, UserPlus, Loader2 } from "lucide-react";
+import { lookupMobile, checkInMember, registerVisitor, attemptDeviceCheckIn } from "./actions";
 
-type Stage = "enter-mobile" | "confirm-member" | "register-visitor" | "done";
+type Stage = "checking-device" | "enter-mobile" | "confirm-member" | "register-visitor" | "done";
 
 export default function CheckInPage() {
-  const [stage, setStage] = useState<Stage>("enter-mobile");
+  const [stage, setStage] = useState<Stage>("checking-device");
   const [mobile, setMobile] = useState("");
   const [name, setName] = useState("");
   const [greeting, setGreeting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Remembered-device flow: try a silent, zero-tap check-in first. Only
+  // falls through to the manual mobile-entry form if this browser isn't
+  // recognized (new phone, cleared cookies, first-ever visit, etc).
+  useEffect(() => {
+    let cancelled = false;
+    attemptDeviceCheckIn().then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setGreeting(result.name);
+        setStage("done");
+      } else {
+        setStage("enter-mobile");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleMobileSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -70,6 +89,12 @@ export default function CheckInPage() {
   return (
     <div className="container max-w-sm py-16 md:py-24">
       <Card className="p-8 text-center border-border/60">
+        {stage === "checking-device" && (
+          <div className="py-8">
+            <Loader2 className="size-6 text-muted-foreground mx-auto animate-spin" />
+          </div>
+        )}
+
         {stage === "enter-mobile" && (
           <>
             <Dumbbell className="size-8 text-primary mx-auto mb-4" strokeWidth={2} />
