@@ -1,281 +1,126 @@
-"use client";
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
-import { useUser } from "@clerk/nextjs";
-import Charts from "./Charts";
+import { createClient } from "@/lib/supabase/server";
+import { memberStatus, daysSince } from "@/lib/status";
+import type { MemberRow } from "./MembersTable";
+import type { PendingMember } from "./PendingSignups";
+import type { VisitorRow } from "./VisitorsTable";
+import type { ActivityRow } from "./ActivityFeed";
+import AdminTabs from "./AdminTabs";
 
-interface Subscription {
-  id: string;
-  user_id: string;
-  plan: string;
-  status: string;
-  start_date: string | null;
-  end_date: string | null;
-  profiles?: {
-    full_name: string | null;
-    email: string | null;
-  };
-}
+// ASSUMPTION (flagged as an open question in 01_PRD.md): "paid this month"
+// is read as calendar-month billing — a member counts as paid if they have
+// a payment record with paid_on in the current calendar month. Swap this
+// for anniversary billing if the owner tells us otherwise during the demo.
+export default async function AdminDashboard() {
+  const supabase = await createClient();
 
-export default function AdminDashboard() {
-  const { user } = useUser();
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-  const [subs, setSubs] = useState<Subscription[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [cancelLoading, setCancelLoading] = useState<string | null>(null);
-  const [planFilter, setPlanFilter] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
-  const [search, setSearch] = useState<string>("");
-
-  const totalSubs = subs.length;
-  const activeSubs = subs.filter((s) => s.status === "active").length;
-  const estimatedRevenue = subs
-    .filter((s) => s.status === "active")
-    .reduce((sum, s) => {
-      if (s.plan === "Monthly") return sum + 20;
-      if (s.plan === "Quarterly") return sum + 55;
-      if (s.plan === "Half-Yearly") return sum + 100;
-      if (s.plan === "Yearly") return sum + 180;
-      return sum;
-    }, 0);
-
-  const filteredSubs = subs.filter((sub) => {
-    if (planFilter && sub.plan !== planFilter) return false;
-    if (statusFilter && sub.status !== statusFilter) return false;
-    if (
-      search &&
-      !(
-        sub.user_id.includes(search) ||
-        (sub.profiles?.full_name || "").toLowerCase().includes(search.toLowerCase()) ||
-        (sub.profiles?.email || "").toLowerCase().includes(search.toLowerCase())
-      )
-    )
-      return false;
-    return true;
-  });
-
-  const handleAdminCancel = async (userId: string, plan: string) => {
-    setCancelLoading(userId + plan);
-    setError(null);
-    try {
-      const res = await fetch("/api/cancel-subscription", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, plan }),
-      });
-      const data = await res.json();
-      if (data.error) setError(data.error);
-      else {
-        setLoading(true);
-        supabase
-          .from("subscriptions")
-          .select("id, user_id, plan, status, start_date, end_date, profiles(full_name, email)")
-          .order("start_date", { ascending: false })
-          .then(({ data, error }) => {
-            if (error) setError(error.message);
-            else {
-              const fixed: Subscription[] = (data || []).map((sub: unknown) => {
-                if (
-                  typeof sub === "object" &&
-                  sub !== null &&
-                  "profiles" in sub &&
-                  Array.isArray((sub as { profiles: unknown }).profiles)
-                ) {
-                  return {
-                    ...(sub as object),
-                    profiles: (sub as { profiles: unknown[] }).profiles[0] as { full_name: string | null; email: string | null },
-                  } as Subscription;
-                }
-                return sub as Subscription;
-              });
-              setSubs(fixed);
-            }
-            setLoading(false);
-          });
-      }
-    } catch (err: unknown) {
-      if (typeof err === "object" && err && "message" in err) {
-        setError((err as { message: string }).message);
-      } else {
-        setError("Failed to cancel subscription.");
-      }
-    }
-    setCancelLoading(null);
-  };
-
-  function exportCSV() {
-    const headers = [
-      "User ID",
-      "Name",
-      "Email",
-      "Plan",
-      "Status",
-      "Start Date",
-      "End Date",
-    ];
-    const rows = filteredSubs.map((sub) => [
-      sub.user_id,
-      sub.profiles?.full_name || "",
-      sub.profiles?.email || "",
-      sub.plan,
-      sub.status,
-      sub.start_date ? new Date(sub.start_date).toLocaleDateString() : "",
-      sub.end_date ? new Date(sub.end_date).toLocaleDateString() : "",
+  const [{ data: members }, { data: payments }, { data: attendance }, { data: visitors }] =
+    await Promise.all([
+      supabase.from("members").select("id, name, mobile, email, join_date, plan_name"),
+      supabase
+        .from("payments")
+        .select("id, member_id, amount, paid_on, valid_until")
+        .order("valid_until", { ascending: false }),
+      supabase
+        .from("attendance")
+        .select("id, member_id, checked_in_at")
+        .order("checked_in_at", { ascending: false }),
+      supabase
+        .from("visitors")
+        .select("id, name, mobile, email, visited_on, converted_member_id")
+        .order("visited_on", { ascending: false }),
     ]);
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `subscriptions-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${now.getMonth()}`;
+
+  const latestPaymentByMember = new Map<string, { amount: number; paid_on: string; valid_until: string }>();
+  const paymentCountByMember = new Map<string, number>();
+  const paidThisMonthMembers = new Set<string>();
+  for (const p of payments ?? []) {
+    if (!latestPaymentByMember.has(p.member_id)) {
+      latestPaymentByMember.set(p.member_id, p);
+    }
+    paymentCountByMember.set(p.member_id, (paymentCountByMember.get(p.member_id) ?? 0) + 1);
+    const paidOn = new Date(p.paid_on);
+    if (`${paidOn.getFullYear()}-${paidOn.getMonth()}` === currentMonthKey) {
+      paidThisMonthMembers.add(p.member_id);
+    }
   }
 
-  useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-      .then(({ data, error }) => {
-        if (error || !data) setIsAdmin(false);
-        else setIsAdmin(data.role === "admin");
-      });
-  }, [user]);
+  const lastSeenByMember = new Map<string, string>();
+  for (const a of attendance ?? []) {
+    const existing = lastSeenByMember.get(a.member_id);
+    if (!existing || new Date(a.checked_in_at) > new Date(existing)) {
+      lastSeenByMember.set(a.member_id, a.checked_in_at);
+    }
+  }
 
-  useEffect(() => {
-    if (isAdmin !== true) return;
-    setLoading(true);
-    supabase
-      .from("subscriptions")
-      .select("id, user_id, plan, status, start_date, end_date, profiles(full_name, email)")
-      .order("start_date", { ascending: false })
-      .then(({ data, error }) => {
-        if (error) setError(error.message);
-        else {
-          const fixed: Subscription[] = (data || []).map((sub: unknown) => {
-            if (
-              typeof sub === "object" &&
-              sub !== null &&
-              "profiles" in sub &&
-              Array.isArray((sub as { profiles: unknown }).profiles)
-            ) {
-              return {
-                ...(sub as object),
-                profiles: (sub as { profiles: unknown[] }).profiles[0] as { full_name: string | null; email: string | null },
-              } as Subscription;
-            }
-            return sub as Subscription;
-          });
-          setSubs(fixed);
-        }
-        setLoading(false);
-      });
-  }, [isAdmin]);
+  const memberNameById = new Map<string, string>();
+  const memberRows: MemberRow[] = (members ?? []).map((m) => {
+    memberNameById.set(m.id, m.name);
+    const latestPayment = latestPaymentByMember.get(m.id);
+    const hasAnyPayment = (paymentCountByMember.get(m.id) ?? 0) > 0;
+    const lastSeen = lastSeenByMember.get(m.id) ?? null;
+    return {
+      id: m.id,
+      name: m.name,
+      mobile: m.mobile,
+      joinDate: m.join_date,
+      planName: m.plan_name ?? "—",
+      validUntil: latestPayment?.valid_until ?? null,
+      // Self-signed-up members with zero payments are "pending", not "expired".
+      status: hasAnyPayment ? memberStatus(latestPayment?.valid_until ?? null, now) : "pending",
+      tenureDays: daysSince(m.join_date, now),
+      lastSeen,
+      inactive7: lastSeen ? daysSince(lastSeen, now) >= 7 : true,
+    };
+  });
 
-  if (isAdmin === null) return <div>Checking admin access...</div>;
-  if (isAdmin === false) return <div className="text-red-500">Access denied. Admins only.</div>;
+  const pendingMembers: PendingMember[] = (members ?? [])
+    .filter((m) => (paymentCountByMember.get(m.id) ?? 0) === 0)
+    .map((m) => ({
+      id: m.id,
+      name: m.name,
+      mobile: m.mobile,
+      email: m.email,
+      joinDate: m.join_date,
+    }));
 
-  if (loading) return <div>Loading all subscriptions...</div>;
-  if (error) return <div className="text-red-500">Error: {error}</div>;
+  const visitorList = visitors ?? [];
+  const visitorRows: VisitorRow[] = visitorList.map((v) => ({
+    id: v.id,
+    name: v.name,
+    mobile: v.mobile,
+    email: v.email,
+    visitedOn: v.visited_on,
+    converted: !!v.converted_member_id,
+  }));
+  const convertedCount = visitorList.filter((v) => v.converted_member_id).length;
+
+  const activity: ActivityRow[] = (attendance ?? []).slice(0, 30).map((a) => ({
+    id: a.id,
+    memberName: memberNameById.get(a.member_id) ?? "Unknown member",
+    checkedInAt: a.checked_in_at,
+  }));
+
+  const totalMembers = memberRows.length;
+  const paidCount = paidThisMonthMembers.size;
+  const unpaidCount = totalMembers - paidCount;
 
   return (
     <div className="container py-8">
-      <h1 className="text-2xl font-bold mb-6">Admin: All User Subscriptions</h1>
-      <Charts subs={subs} />
-      <div className="mb-6 flex flex-wrap gap-6 items-end">
-        <div>
-          <div className="font-semibold">Total Subs</div>
-          <div>{totalSubs}</div>
-        </div>
-        <div>
-          <div className="font-semibold">Active Subs</div>
-          <div>{activeSubs}</div>
-        </div>
-        <div>
-          <div className="font-semibold">Est. Revenue</div>
-          <div>${estimatedRevenue}</div>
-        </div>
-        <div>
-          <button onClick={exportCSV} className="btn btn-secondary mt-5">Export CSV</button>
-        </div>
-        <div>
-          <label className="block text-xs font-medium">Plan</label>
-          <select value={planFilter} onChange={e => setPlanFilter(e.target.value)} className="input input-bordered">
-            <option value="">All</option>
-            <option value="Monthly">Monthly</option>
-            <option value="Quarterly">Quarterly</option>
-            <option value="Half-Yearly">Half-Yearly</option>
-            <option value="Yearly">Yearly</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium">Status</label>
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="input input-bordered">
-            <option value="">All</option>
-            <option value="active">Active</option>
-            <option value="pending">Pending</option>
-            <option value="canceled">Canceled</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium">Search</label>
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="input input-bordered"
-            placeholder="User ID, name, or email"
-          />
-        </div>
-      </div>
-      {filteredSubs.length === 0 ? (
-        <div>No subscriptions found.</div>
-      ) : (
-        <table className="min-w-full border">
-          <thead>
-            <tr>
-              <th className="border px-2 py-1">User ID</th>
-              <th className="border px-2 py-1">Name</th>
-              <th className="border px-2 py-1">Email</th>
-              <th className="border px-2 py-1">Plan</th>
-              <th className="border px-2 py-1">Status</th>
-              <th className="border px-2 py-1">Start Date</th>
-              <th className="border px-2 py-1">End Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredSubs.map((sub) => (
-              <tr key={sub.id} className={sub.status === "active" ? "bg-green-50" : ""}>
-                <td className="border px-2 py-1 font-mono">{sub.user_id}</td>
-                <td className="border px-2 py-1">{sub.profiles?.full_name || "-"}</td>
-                <td className="border px-2 py-1">{sub.profiles?.email || "-"}</td>
-                <td className="border px-2 py-1">{sub.plan}</td>
-                <td className="border px-2 py-1 capitalize">{sub.status}
-                  {sub.status === "active" && (
-                    <button
-                      className="ml-2 text-xs text-red-600 underline"
-                      disabled={!!cancelLoading}
-                      onClick={() => handleAdminCancel(sub.user_id, sub.plan)}
-                    >
-                      {cancelLoading === sub.user_id + sub.plan ? "Canceling..." : "Cancel"}
-                    </button>
-                  )}
-                </td>
-                <td className="border px-2 py-1">{sub.start_date ? new Date(sub.start_date).toLocaleDateString() : "-"}</td>
-                <td className="border px-2 py-1">{sub.end_date ? new Date(sub.end_date).toLocaleDateString() : "-"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <h1 className="text-2xl font-semibold mb-6">Dashboard</h1>
+      <AdminTabs
+        totalMembers={totalMembers}
+        paidCount={paidCount}
+        unpaidCount={unpaidCount}
+        visitorCount={visitorList.length}
+        convertedCount={convertedCount}
+        activity={activity}
+        pendingMembers={pendingMembers}
+        memberRows={memberRows}
+        visitorRows={visitorRows}
+      />
     </div>
   );
-} 
+}
