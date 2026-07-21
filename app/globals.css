@@ -44,45 +44,44 @@
 }
 
 /*
- * Iron & Ash palette — grounded in the gym's own materials rather than a
- * generic dark-mode default: warm charcoal (like a rubber gym floor, not
- * pure black), an iron-amber accent (chalk-dust warning-tape energy, used
- * for the one thing on each screen that matters), and a cool steel-gray for
- * structural/secondary elements (the plates and rack, not the lift itself).
+ * Being Fit — "Bold Signal" direction: confident, high-impact, a vibrant
+ * accent used as a solid block (not just a highlight color) against a dark
+ * ground. Pushed more saturated/electric than a typical dark-mode accent —
+ * this is meant to read as a signal, not a decoration.
  */
 :root {
   --radius: 0.5rem;
-  --background: oklch(0.16 0.014 55);
-  --foreground: oklch(0.96 0.004 90);
-  --card: oklch(0.205 0.014 55);
-  --card-foreground: oklch(0.96 0.004 90);
-  --popover: oklch(0.205 0.014 55);
-  --popover-foreground: oklch(0.96 0.004 90);
-  --primary: oklch(0.74 0.16 55);
-  --primary-foreground: oklch(0.16 0.02 55);
-  --secondary: oklch(0.32 0.02 250);
-  --secondary-foreground: oklch(0.96 0.004 90);
-  --muted: oklch(0.25 0.014 55);
+  --background: oklch(0.15 0.012 55);
+  --foreground: oklch(0.97 0.004 90);
+  --card: oklch(0.20 0.012 55);
+  --card-foreground: oklch(0.97 0.004 90);
+  --popover: oklch(0.20 0.012 55);
+  --popover-foreground: oklch(0.97 0.004 90);
+  --primary: oklch(0.66 0.22 32);
+  --primary-foreground: oklch(0.14 0.01 32);
+  --secondary: oklch(0.30 0.02 250);
+  --secondary-foreground: oklch(0.97 0.004 90);
+  --muted: oklch(0.24 0.012 55);
   --muted-foreground: oklch(0.68 0.015 60);
-  --accent: oklch(0.32 0.03 250);
-  --accent-foreground: oklch(0.96 0.004 90);
+  --accent: oklch(0.30 0.03 250);
+  --accent-foreground: oklch(0.97 0.004 90);
   --destructive: oklch(0.62 0.21 25);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.74 0.16 55 / 0.5);
-  --chart-1: oklch(0.74 0.16 55);
+  --ring: oklch(0.66 0.22 32 / 0.5);
+  --chart-1: oklch(0.66 0.22 32);
   --chart-2: oklch(0.6 0.1 250);
   --chart-3: oklch(0.65 0.19 25);
   --chart-4: oklch(0.75 0.12 145);
   --chart-5: oklch(0.55 0.02 60);
-  --sidebar: oklch(0.18 0.014 55);
-  --sidebar-foreground: oklch(0.96 0.004 90);
-  --sidebar-primary: oklch(0.74 0.16 55);
-  --sidebar-primary-foreground: oklch(0.16 0.02 55);
-  --sidebar-accent: oklch(0.32 0.03 250);
-  --sidebar-accent-foreground: oklch(0.96 0.004 90);
+  --sidebar: oklch(0.17 0.012 55);
+  --sidebar-foreground: oklch(0.97 0.004 90);
+  --sidebar-primary: oklch(0.66 0.22 32);
+  --sidebar-primary-foreground: oklch(0.14 0.01 32);
+  --sidebar-accent: oklch(0.30 0.03 250);
+  --sidebar-accent-foreground: oklch(0.97 0.004 90);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.74 0.16 55 / 0.5);
+  --sidebar-ring: oklch(0.66 0.22 32 / 0.5);
 }
 
 @layer base {
@@ -122,4 +121,13 @@
   border-radius: 9999px;
   background: var(--primary);
   flex-shrink: 0;
+}
+
+/* Bold Signal's defining move: a solid, saturated color block against the
+   dark ground — not a gradient, not a subtle tint. Used sparingly (hero
+   CTA area) so it reads as a signal, not wallpaper. */
+.signal-block {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-radius: var(--radius-lg);
 }
