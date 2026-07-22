@@ -50,6 +50,11 @@ NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
+# The exact domain QR codes are generated against — set this to your real
+# domain once you have one, instead of leaving QR generation to whatever
+# URL happens to be open in the browser. Redeploy after changing it.
+NEXT_PUBLIC_SITE_URL=https://your-gym-domain.com
+
 RESEND_API_KEY=your_resend_api_key
 NOTIFICATIONS_FROM_EMAIL=your_notifications_from_address
 OWNER_EMAIL=your_gym_owner_email

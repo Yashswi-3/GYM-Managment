@@ -84,9 +84,9 @@ export default function AdminTabs({
             onFilterSelect={goToMembersFiltered}
           />
           <div className="flex flex-wrap gap-3">
-            <QRCard path="/checkin" label="Daily check-in" filename="gym-checkin-qr.png" />
-            <QRCard path="/join" label="New member signup" filename="gym-join-qr.png" />
-            <QRCard path="/visit" label="Visitor self-registration" filename="gym-visit-qr.png" />
+            <QRCard path="/checkin" label="Daily check-in" filename="gym-checkin-qr.png" badge="C" />
+            <QRCard path="/join" label="New member signup" filename="gym-join-qr.png" badge="M" />
+            <QRCard path="/visit" label="Visitor self-registration" filename="gym-visit-qr.png" badge="V" />
           </div>
           <ActivityFeed rows={activity} />
         </div>
