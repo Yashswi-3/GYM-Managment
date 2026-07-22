@@ -14,6 +14,7 @@ export interface VisitorRow {
   name: string;
   mobile: string;
   email: string | null;
+  remarks: string | null;
   visitedOn: string;
   converted: boolean;
 }
@@ -28,6 +29,7 @@ export default function VisitorsTable({ rows }: { rows: VisitorRow[] }) {
             <TableHead>Name</TableHead>
             <TableHead>Mobile</TableHead>
             <TableHead>Email</TableHead>
+            <TableHead>Remarks</TableHead>
             <TableHead>Visited</TableHead>
             <TableHead>Status</TableHead>
           </TableRow>
@@ -35,7 +37,7 @@ export default function VisitorsTable({ rows }: { rows: VisitorRow[] }) {
         <TableBody>
           {rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground">
+              <TableCell colSpan={6} className="text-center text-muted-foreground">
                 No visitors yet.
               </TableCell>
             </TableRow>
@@ -45,6 +47,9 @@ export default function VisitorsTable({ rows }: { rows: VisitorRow[] }) {
                 <TableCell>{v.name}</TableCell>
                 <TableCell className="font-mono">{v.mobile}</TableCell>
                 <TableCell>{v.email ?? "—"}</TableCell>
+                <TableCell className="max-w-[280px] whitespace-pre-wrap text-sm text-muted-foreground">
+                  {v.remarks ?? "—"}
+                </TableCell>
                 <TableCell>{new Date(v.visitedOn).toLocaleDateString()}</TableCell>
                 <TableCell>
                   {v.converted ? (

@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Alert } from "@/components/ui/alert";
 import { FormSubmitButton } from "@/components/form-submit-button";
 import { Sparkles, CheckCircle2 } from "lucide-react";
@@ -30,6 +31,7 @@ export default async function VisitPage({
               <Input name="name" placeholder="Name" required />
               <Input type="tel" inputMode="numeric" name="mobile" placeholder="Mobile number" required />
               <Input type="email" name="email" placeholder="Email (optional)" />
+              <Textarea name="remarks" placeholder="Remarks (optional)" rows={3} />
               {error && <Alert variant="destructive">{error}</Alert>}
               <FormSubmitButton label="Submit" pendingLabel="Submitting..." className="w-full" />
             </form>

@@ -9,6 +9,7 @@ const visitSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
   mobile: z.string().trim().min(7, "Enter a valid mobile number").max(20),
   email: z.string().trim().email("Enter a valid email").max(200).optional().or(z.literal("")),
+  remarks: z.string().trim().max(500).optional().or(z.literal("")),
 });
 
 /**
@@ -25,13 +26,14 @@ export async function registerAsVisitor(formData: FormData) {
     name: formData.get("name"),
     mobile: formData.get("mobile"),
     email: formData.get("email") ?? "",
+    remarks: formData.get("remarks") ?? "",
   });
   if (!parsed.success) {
     redirect(`/visit?error=${encodeURIComponent(parsed.error.issues[0].message)}`);
   }
 
   const supabase = await createServiceClient();
-  const { name, email } = parsed.data;
+  const { name, email, remarks } = parsed.data;
   const mobile = normalizeMobile(parsed.data.mobile);
 
   const { data: existingMember } = await supabase
@@ -44,7 +46,7 @@ export async function registerAsVisitor(formData: FormData) {
     redirect(`/visit?done=1&already=1&name=${encodeURIComponent(name)}`);
   }
 
-  const { error } = await supabase.from("visitors").insert({ name, mobile, email: email || null });
+  const { error } = await supabase.from("visitors").insert({ name, mobile, email: email || null, remarks: remarks || null });
   if (error) {
     redirect(`/visit?error=${encodeURIComponent(error.message)}`);
   }

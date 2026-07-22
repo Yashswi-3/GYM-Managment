@@ -86,6 +86,7 @@ const visitorSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
   mobile: z.string().trim().min(7, "Enter a valid mobile number"),
   email: z.string().trim().email().optional().or(z.literal("")),
+  remarks: z.string().trim().max(500).optional().or(z.literal("")),
 });
 
 /** Admin-side manual visitor add — the same data a walk-in would submit via the /visit QR. */
@@ -94,6 +95,7 @@ export async function addVisitorManually(formData: FormData) {
     name: formData.get("name"),
     mobile: formData.get("mobile"),
     email: formData.get("email"),
+    remarks: formData.get("remarks"),
   });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
 
@@ -102,6 +104,7 @@ export async function addVisitorManually(formData: FormData) {
     name: parsed.data.name,
     mobile: normalizeMobile(parsed.data.mobile),
     email: parsed.data.email || null,
+    remarks: parsed.data.remarks || null,
   });
   if (error) return { ok: false, error: error.message };
 
@@ -169,6 +172,64 @@ export async function recordPayment(formData: FormData) {
     amount: parsed.data.amount,
     valid_until: parsed.data.validUntil,
   });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+const memberOverrideSchema = z.object({
+  memberId: z.string().uuid(),
+  statusOverride: z.enum(["active", "inactive", "auto"]),
+});
+
+/**
+ * Manually forces a member active/inactive, or clears the override back to
+ * derived-from-payment status.
+ */
+export async function setMemberActiveOverride(formData: FormData) {
+  const parsed = memberOverrideSchema.safeParse({
+    memberId: formData.get("memberId"),
+    statusOverride: formData.get("statusOverride"),
+  });
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const isActiveOverride =
+    parsed.data.statusOverride === "auto"
+      ? null
+      : parsed.data.statusOverride === "active";
+
+  const { error } = await supabase
+    .from("members")
+    .update({ is_active_override: isActiveOverride })
+    .eq("id", parsed.data.memberId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+export const toggleMemberActive = setMemberActiveOverride;
+
+const updatePaymentDateSchema = z.object({
+  paymentId: z.string().uuid(),
+  newPaidOn: z.string().min(1, "Paid-on date is required"),
+});
+
+/** Update the paid_on date of a payment (for backdating/correcting activation date) */
+export async function updatePaymentDate(formData: FormData) {
+  const parsed = updatePaymentDateSchema.safeParse({
+    paymentId: formData.get("paymentId"),
+    newPaidOn: formData.get("newPaidOn"),
+  });
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("payments")
+    .update({ paid_on: parsed.data.newPaidOn })
+    .eq("id", parsed.data.paymentId);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/admin");

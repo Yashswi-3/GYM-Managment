@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import {
   Table,
   TableHeader,
@@ -11,8 +11,10 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import type { MemberStatus } from "@/lib/status";
+import { setMemberActiveOverride } from "./actions";
 
 export interface MemberRow {
   id: string;
@@ -21,6 +23,7 @@ export interface MemberRow {
   joinDate: string;
   planName: string;
   validUntil: string | null;
+  isActiveOverride: boolean | null;
   status: MemberStatus;
   tenureDays: number;
   lastSeen: string | null;
@@ -35,6 +38,7 @@ const statusStyles: Record<MemberStatus, string> = {
   active: "bg-[oklch(0.75_0.12_145_/_0.18)] text-[oklch(0.8_0.15_145)]",
   expiring_soon: "bg-primary/15 text-primary",
   expired: "bg-destructive/15 text-destructive",
+  inactive: "bg-muted text-muted-foreground border border-border/60",
 };
 
 const statusLabels: Record<MemberStatus, string> = {
@@ -42,6 +46,7 @@ const statusLabels: Record<MemberStatus, string> = {
   active: "Active",
   expiring_soon: "Expiring soon",
   expired: "Expired",
+  inactive: "Inactive",
 };
 
 const filterLabels: Record<MemberFilter, string> = {
@@ -49,6 +54,64 @@ const filterLabels: Record<MemberFilter, string> = {
   paid: "Paid this month",
   unpaid: "Unpaid this month",
 };
+
+function MemberOverrideControls({ member }: { member: MemberRow }) {
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function submit(statusOverride: "active" | "inactive" | "auto") {
+    setError(null);
+    const formData = new FormData();
+    formData.set("memberId", member.id);
+    formData.set("statusOverride", statusOverride);
+
+    startTransition(async () => {
+      const result = await setMemberActiveOverride(formData);
+      if (!result.ok) setError(result.error ?? "Something went wrong");
+    });
+  }
+
+  const current =
+    member.isActiveOverride === true ? "active" : member.isActiveOverride === false ? "inactive" : "auto";
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant={current === "auto" ? "default" : "secondary"}
+          onClick={() => submit("auto")}
+          loading={isPending}
+        >
+          Auto
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={current === "active" ? "default" : "secondary"}
+          onClick={() => submit("active")}
+          loading={isPending}
+        >
+          Active
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={current === "inactive" ? "default" : "secondary"}
+          onClick={() => submit("inactive")}
+          loading={isPending}
+        >
+          Inactive
+        </Button>
+      </div>
+      <div className="text-[11px] text-muted-foreground">
+        {current === "auto" ? "Derived from latest payment." : `Forced ${current}.`}
+      </div>
+      {error && <Alert variant="destructive">{error}</Alert>}
+    </div>
+  );
+}
 
 export default function MembersTable({
   rows,
@@ -109,12 +172,13 @@ export default function MembersTable({
             <TableHead>Valid until</TableHead>
             <TableHead>Tenure</TableHead>
             <TableHead>Last seen</TableHead>
+            <TableHead>Override</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {filtered.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="text-center text-muted-foreground">
+              <TableCell colSpan={8} className="text-center text-muted-foreground">
                 {rows.length === 0 ? "No members yet." : "No members match this filter."}
               </TableCell>
             </TableRow>
@@ -138,6 +202,9 @@ export default function MembersTable({
                     <span className="text-destructive">Never</span>
                   )}
                   {m.inactive7 && <span className="ml-1 text-xs text-destructive">(inactive)</span>}
+                </TableCell>
+                <TableCell>
+                  <MemberOverrideControls member={m} />
                 </TableCell>
               </TableRow>
             ))

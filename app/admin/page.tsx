@@ -15,7 +15,7 @@ export default async function AdminDashboard() {
 
   const [{ data: members }, { data: payments }, { data: attendance }, { data: visitors }] =
     await Promise.all([
-      supabase.from("members").select("id, name, mobile, email, join_date, plan_name"),
+      supabase.from("members").select("id, name, mobile, email, join_date, plan_name, is_active_override"),
       supabase
         .from("payments")
         .select("id, member_id, amount, paid_on, valid_until")
@@ -26,7 +26,7 @@ export default async function AdminDashboard() {
         .order("checked_in_at", { ascending: false }),
       supabase
         .from("visitors")
-        .select("id, name, mobile, email, visited_on, converted_member_id")
+        .select("id, name, mobile, email, remarks, visited_on, converted_member_id")
         .order("visited_on", { ascending: false }),
     ]);
 
@@ -46,6 +46,21 @@ export default async function AdminDashboard() {
       paidThisMonthMembers.add(p.member_id);
     }
   }
+
+  const memberInfoById = new Map<string, { name: string; mobile: string }>();
+  for (const m of members ?? []) {
+    memberInfoById.set(m.id, { name: m.name, mobile: m.mobile });
+  }
+
+  const paymentRows = (payments ?? []).map((payment) => ({
+    id: payment.id,
+    memberId: payment.member_id,
+    memberName: memberInfoById.get(payment.member_id)?.name ?? "Unknown member",
+    memberMobile: memberInfoById.get(payment.member_id)?.mobile ?? "",
+    amount: payment.amount,
+    paidOn: payment.paid_on,
+    validUntil: payment.valid_until,
+  }));
 
   const lastSeenByMember = new Map<string, string>();
   for (const a of attendance ?? []) {
@@ -68,8 +83,15 @@ export default async function AdminDashboard() {
       joinDate: m.join_date,
       planName: m.plan_name ?? "—",
       validUntil: latestPayment?.valid_until ?? null,
+      isActiveOverride: m.is_active_override ?? null,
       // Self-signed-up members with zero payments are "pending", not "expired".
-      status: hasAnyPayment ? memberStatus(latestPayment?.valid_until ?? null, now) : "pending",
+      status: hasAnyPayment
+        ? memberStatus(latestPayment?.valid_until ?? null, now, m.is_active_override ?? null)
+        : m.is_active_override === true
+          ? "active"
+          : m.is_active_override === false
+            ? "inactive"
+            : "pending",
       tenureDays: daysSince(m.join_date, now),
       lastSeen,
       inactive7: lastSeen ? daysSince(lastSeen, now) >= 7 : true,
@@ -96,6 +118,7 @@ export default async function AdminDashboard() {
     name: v.name,
     mobile: v.mobile,
     email: v.email,
+    remarks: v.remarks,
     visitedOn: v.visited_on,
     converted: !!v.converted_member_id,
   }));
@@ -123,6 +146,7 @@ export default async function AdminDashboard() {
         activity={activity}
         pendingMembers={pendingMembers}
         memberRows={memberRows}
+        paymentRows={paymentRows}
         visitorRows={visitorRows}
       />
     </div>
