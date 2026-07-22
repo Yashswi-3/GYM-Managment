@@ -50,10 +50,10 @@ export default function MembersTable({ rows }: { rows: MemberRow[] }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-semibold">Members</h2>
         <Input
-          className="max-w-xs"
+          className="w-full sm:w-auto sm:max-w-xs"
           placeholder="Search by name or mobile"
           value={search}
           onChange={(e) => setSearch(e.target.value)}

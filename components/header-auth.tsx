@@ -24,9 +24,11 @@ export default function HeaderAuth({ email }: { email: string | null }) {
   }
 
   return (
-    <div className="flex items-center gap-3 text-sm">
-      <span className="text-muted-foreground">{email}</span>
-      <Button variant="secondary" onClick={signOut}>
+    <div className="flex items-center gap-2 sm:gap-3 text-sm min-w-0">
+      <span className="hidden sm:inline text-muted-foreground truncate max-w-[40vw]">
+        {email}
+      </span>
+      <Button variant="secondary" size="sm" onClick={signOut} className="shrink-0">
         Sign out
       </Button>
     </div>

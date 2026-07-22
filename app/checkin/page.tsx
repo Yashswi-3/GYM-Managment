@@ -114,7 +114,7 @@ export default function CheckInPage() {
                 className="h-12 text-center text-lg"
               />
               {error && <Alert variant="destructive">{error}</Alert>}
-              <Button type="submit" disabled={isPending} size="lg" className="w-full">
+              <Button type="submit" loading={isPending} size="lg" className="w-full">
                 {isPending ? "Checking..." : "Continue"}
               </Button>
             </form>
@@ -129,7 +129,7 @@ export default function CheckInPage() {
             </h1>
             <p className="text-sm text-muted-foreground mb-6">Tap to confirm you&apos;re here</p>
             {error && <Alert variant="destructive" className="mb-3">{error}</Alert>}
-            <Button onClick={handleConfirmPresent} disabled={isPending} size="lg" className="w-full">
+            <Button onClick={handleConfirmPresent} loading={isPending} size="lg" className="w-full">
               {isPending ? "Checking in..." : "Check in"}
             </Button>
           </>
@@ -153,7 +153,7 @@ export default function CheckInPage() {
                 className="h-12 text-center text-lg"
               />
               {error && <Alert variant="destructive">{error}</Alert>}
-              <Button type="submit" disabled={isPending} size="lg" className="w-full">
+              <Button type="submit" loading={isPending} size="lg" className="w-full">
                 {isPending ? "Saving..." : "Register"}
               </Button>
             </form>

@@ -35,7 +35,7 @@ export default function AddVisitorForm() {
         <Input name="mobile" placeholder="Mobile" required />
         <Input name="email" type="email" placeholder="Email (optional)" />
         <div className="flex items-center gap-3">
-          <Button type="submit" disabled={isPending}>
+          <Button type="submit" loading={isPending}>
             {isPending ? "Saving..." : "Add visitor"}
           </Button>
           {success && <span className="text-sm text-[oklch(0.8_0.15_145)]">Added.</span>}

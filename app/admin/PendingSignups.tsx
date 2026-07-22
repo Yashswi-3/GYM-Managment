@@ -35,10 +35,27 @@ function ActivateRow({ member }: { member: PendingMember }) {
         <div className="text-xs text-muted-foreground font-mono">{member.mobile}</div>
       </div>
       <form action={handleSubmit} className="flex flex-wrap items-center gap-2 flex-1">
-        <Input name="planName" placeholder="Plan (e.g. Monthly)" className="w-40" required />
-        <Input name="amount" type="number" step="0.01" placeholder="Amount" className="w-28" required />
-        <Input name="validUntil" type="date" className="w-40" required />
-        <Button type="submit" size="sm" disabled={isPending}>
+        <Input
+          name="planName"
+          placeholder="Plan (e.g. Monthly)"
+          className="flex-1 min-w-[140px] sm:flex-none sm:w-40"
+          required
+        />
+        <Input
+          name="amount"
+          type="number"
+          step="0.01"
+          placeholder="Amount"
+          className="flex-1 min-w-[100px] sm:flex-none sm:w-28"
+          required
+        />
+        <Input
+          name="validUntil"
+          type="date"
+          className="flex-1 min-w-[140px] sm:flex-none sm:w-40"
+          required
+        />
+        <Button type="submit" size="sm" loading={isPending}>
           {isPending ? "Activating..." : "Activate"}
         </Button>
       </form>

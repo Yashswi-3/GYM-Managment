@@ -53,7 +53,7 @@ export default function LoginPage() {
             required
           />
           {error && <Alert variant="destructive">{error}</Alert>}
-          <Button type="submit" disabled={loading} size="lg" className="w-full">
+          <Button type="submit" loading={loading} size="lg" className="w-full">
             {loading ? "Signing in..." : "Sign in"}
           </Button>
         </form>

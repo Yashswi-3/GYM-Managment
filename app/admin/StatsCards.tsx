@@ -28,7 +28,7 @@ export default function StatsCards({
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
       {stats.map((s) => (
         <Card key={s.label} className="p-4 border-border/60">
           <s.icon className={`size-4 mb-2 ${s.tone === "warn" ? "text-destructive" : "text-primary"}`} />

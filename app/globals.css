@@ -3,6 +3,21 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Tailwind v4's `container` utility ships with no padding or centering by
+   default. Without this, content sits flush against the viewport edge on
+   phones and the whole app reads as "not responsive" even though the grids
+   underneath are fine. This one customization fixes every page at once. */
+@utility container {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+@media (min-width: 640px) {
+  .container {
+    padding-inline: 1.5rem;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

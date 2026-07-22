@@ -38,7 +38,7 @@ export default function AddMemberForm() {
         <Input name="amount" type="number" step="0.01" placeholder="Amount" required />
         <Input name="validUntil" type="date" required />
         <div className="md:col-span-6 flex items-center gap-3">
-          <Button type="submit" disabled={isPending}>
+          <Button type="submit" loading={isPending}>
             {isPending ? "Saving..." : "Save"}
           </Button>
           {error && <Alert variant="destructive">{error}</Alert>}

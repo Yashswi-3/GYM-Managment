@@ -1,0 +1,336 @@
+diff --git a/app/admin/AddMemberForm.tsx b/app/admin/AddMemberForm.tsx
+index 3865d3e..fe203fe 100644
+--- a/app/admin/AddMemberForm.tsx
++++ b/app/admin/AddMemberForm.tsx
+@@ -38,7 +38,7 @@ export default function AddMemberForm() {
+         <Input name="amount" type="number" step="0.01" placeholder="Amount" required />
+         <Input name="validUntil" type="date" required />
+         <div className="md:col-span-6 flex items-center gap-3">
+-          <Button type="submit" disabled={isPending}>
++          <Button type="submit" loading={isPending}>
+             {isPending ? "Saving..." : "Save"}
+           </Button>
+           {error && <Alert variant="destructive">{error}</Alert>}
+diff --git a/app/admin/AddVisitorForm.tsx b/app/admin/AddVisitorForm.tsx
+index d9628b2..6059b2d 100644
+--- a/app/admin/AddVisitorForm.tsx
++++ b/app/admin/AddVisitorForm.tsx
+@@ -35,7 +35,7 @@ export default function AddVisitorForm() {
+         <Input name="mobile" placeholder="Mobile" required />
+         <Input name="email" type="email" placeholder="Email (optional)" />
+         <div className="flex items-center gap-3">
+-          <Button type="submit" disabled={isPending}>
++          <Button type="submit" loading={isPending}>
+             {isPending ? "Saving..." : "Add visitor"}
+           </Button>
+           {success && <span className="text-sm text-[oklch(0.8_0.15_145)]">Added.</span>}
+diff --git a/app/admin/MembersTable.tsx b/app/admin/MembersTable.tsx
+index a4d7c3d..c4762d4 100644
+--- a/app/admin/MembersTable.tsx
++++ b/app/admin/MembersTable.tsx
+@@ -50,10 +50,10 @@ export default function MembersTable({ rows }: { rows: MemberRow[] }) {
+ 
+   return (
+     <div className="space-y-3">
+-      <div className="flex items-center justify-between">
++      <div className="flex flex-wrap items-center justify-between gap-2">
+         <h2 className="font-semibold">Members</h2>
+         <Input
+-          className="max-w-xs"
++          className="w-full sm:w-auto sm:max-w-xs"
+           placeholder="Search by name or mobile"
+           value={search}
+           onChange={(e) => setSearch(e.target.value)}
+diff --git a/app/admin/PendingSignups.tsx b/app/admin/PendingSignups.tsx
+index 6423e35..5974adb 100644
+--- a/app/admin/PendingSignups.tsx
++++ b/app/admin/PendingSignups.tsx
+@@ -35,10 +35,27 @@ function ActivateRow({ member }: { member: PendingMember }) {
+         <div className="text-xs text-muted-foreground font-mono">{member.mobile}</div>
+       </div>
+       <form action={handleSubmit} className="flex flex-wrap items-center gap-2 flex-1">
+-        <Input name="planName" placeholder="Plan (e.g. Monthly)" className="w-40" required />
+-        <Input name="amount" type="number" step="0.01" placeholder="Amount" className="w-28" required />
+-        <Input name="validUntil" type="date" className="w-40" required />
+-        <Button type="submit" size="sm" disabled={isPending}>
++        <Input
++          name="planName"
++          placeholder="Plan (e.g. Monthly)"
++          className="flex-1 min-w-[140px] sm:flex-none sm:w-40"
++          required
++        />
++        <Input
++          name="amount"
++          type="number"
++          step="0.01"
++          placeholder="Amount"
++          className="flex-1 min-w-[100px] sm:flex-none sm:w-28"
++          required
++        />
++        <Input
++          name="validUntil"
++          type="date"
++          className="flex-1 min-w-[140px] sm:flex-none sm:w-40"
++          required
++        />
++        <Button type="submit" size="sm" loading={isPending}>
+           {isPending ? "Activating..." : "Activate"}
+         </Button>
+       </form>
+diff --git a/app/admin/StatsCards.tsx b/app/admin/StatsCards.tsx
+index e224567..1c13105 100644
+--- a/app/admin/StatsCards.tsx
++++ b/app/admin/StatsCards.tsx
+@@ -28,7 +28,7 @@ export default function StatsCards({
+   ];
+ 
+   return (
+-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
++    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+       {stats.map((s) => (
+         <Card key={s.label} className="p-4 border-border/60">
+           <s.icon className={`size-4 mb-2 ${s.tone === "warn" ? "text-destructive" : "text-primary"}`} />
+diff --git a/app/admin/loading.tsx b/app/admin/loading.tsx
+new file mode 100644
+index 0000000..c3d4eb9
+--- /dev/null
++++ b/app/admin/loading.tsx
+@@ -0,0 +1,9 @@
++import { Loader2 } from "lucide-react";
++
++export default function AdminLoading() {
++  return (
++    <div className="container py-24 flex items-center justify-center">
++      <Loader2 className="size-6 text-muted-foreground animate-spin" />
++    </div>
++  );
++}
+diff --git a/app/checkin/page.tsx b/app/checkin/page.tsx
+index 7edea73..f997f18 100644
+--- a/app/checkin/page.tsx
++++ b/app/checkin/page.tsx
+@@ -114,7 +114,7 @@ export default function CheckInPage() {
+                 className="h-12 text-center text-lg"
+               />
+               {error && <Alert variant="destructive">{error}</Alert>}
+-              <Button type="submit" disabled={isPending} size="lg" className="w-full">
++              <Button type="submit" loading={isPending} size="lg" className="w-full">
+                 {isPending ? "Checking..." : "Continue"}
+               </Button>
+             </form>
+@@ -129,7 +129,7 @@ export default function CheckInPage() {
+             </h1>
+             <p className="text-sm text-muted-foreground mb-6">Tap to confirm you&apos;re here</p>
+             {error && <Alert variant="destructive" className="mb-3">{error}</Alert>}
+-            <Button onClick={handleConfirmPresent} disabled={isPending} size="lg" className="w-full">
++            <Button onClick={handleConfirmPresent} loading={isPending} size="lg" className="w-full">
+               {isPending ? "Checking in..." : "Check in"}
+             </Button>
+           </>
+@@ -153,7 +153,7 @@ export default function CheckInPage() {
+                 className="h-12 text-center text-lg"
+               />
+               {error && <Alert variant="destructive">{error}</Alert>}
+-              <Button type="submit" disabled={isPending} size="lg" className="w-full">
++              <Button type="submit" loading={isPending} size="lg" className="w-full">
+                 {isPending ? "Saving..." : "Register"}
+               </Button>
+             </form>
+diff --git a/app/globals.css b/app/globals.css
+index e2d9310..5d1ee96 100644
+--- a/app/globals.css
++++ b/app/globals.css
+@@ -3,6 +3,21 @@
+ 
+ @custom-variant dark (&:is(.dark *));
+ 
++/* Tailwind v4's `container` utility ships with no padding or centering by
++   default. Without this, content sits flush against the viewport edge on
++   phones and the whole app reads as "not responsive" even though the grids
++   underneath are fine. This one customization fixes every page at once. */
++@utility container {
++  width: 100%;
++  margin-inline: auto;
++  padding-inline: 1rem;
++}
++@media (min-width: 640px) {
++  .container {
++    padding-inline: 1.5rem;
++  }
++}
++
+ @theme inline {
+   --color-background: var(--background);
+   --color-foreground: var(--foreground);
+diff --git a/app/join/page.tsx b/app/join/page.tsx
+index 0ea125e..e083f26 100644
+--- a/app/join/page.tsx
++++ b/app/join/page.tsx
+@@ -57,7 +57,7 @@ export default function JoinPage() {
+                 required
+               />
+               {error && <Alert variant="destructive">{error}</Alert>}
+-              <Button type="submit" disabled={isPending} size="lg" className="w-full">
++              <Button type="submit" loading={isPending} size="lg" className="w-full">
+                 {isPending ? "Submitting..." : "Submit"}
+               </Button>
+             </form>
+diff --git a/app/loading.tsx b/app/loading.tsx
+new file mode 100644
+index 0000000..1279fbc
+--- /dev/null
++++ b/app/loading.tsx
+@@ -0,0 +1,9 @@
++import { Loader2 } from "lucide-react";
++
++export default function RootLoading() {
++  return (
++    <div className="container py-24 flex items-center justify-center">
++      <Loader2 className="size-6 text-muted-foreground animate-spin" />
++    </div>
++  );
++}
+diff --git a/app/login/page.tsx b/app/login/page.tsx
+index 0cce40f..570a3b8 100644
+--- a/app/login/page.tsx
++++ b/app/login/page.tsx
+@@ -53,7 +53,7 @@ export default function LoginPage() {
+             required
+           />
+           {error && <Alert variant="destructive">{error}</Alert>}
+-          <Button type="submit" disabled={loading} size="lg" className="w-full">
++          <Button type="submit" loading={loading} size="lg" className="w-full">
+             {loading ? "Signing in..." : "Sign in"}
+           </Button>
+         </form>
+diff --git a/app/page.tsx b/app/page.tsx
+index 26fcae9..e0415a8 100644
+--- a/app/page.tsx
++++ b/app/page.tsx
+@@ -1,38 +1,15 @@
+-import Link from "next/link";
+-import { Button } from "@/components/ui/button";
+-import { QrCode, ShieldCheck } from "lucide-react";
+-import { GYM_NAME, GYM_TAGLINE } from "@/lib/site";
++import { redirect } from "next/navigation";
++import { createClient } from "@/lib/supabase/server";
+ 
+-export default function Home() {
+-  return (
+-    <div className="container max-w-3xl py-16 md:py-20 text-center">
+-      <p className="font-display uppercase tracking-[0.3em] text-sm text-primary mb-6">
+-        {GYM_NAME}
+-      </p>
++// The app has exactly one public entry point for staff: log in, land on the
++// dashboard. There's nothing to choose between here on purpose — the
++// checkin/join/visit routes are only ever reached via their printed QR
++// codes, never by navigating this page.
++export default async function Home() {
++  const supabase = await createClient();
++  const {
++    data: { user },
++  } = await supabase.auth.getUser();
+ 
+-      <div className="signal-block px-6 py-10 md:py-14 mb-8">
+-        <h1 className="font-display text-4xl md:text-6xl font-bold leading-tight mb-4">
+-          Scan in. Lift. Done.
+-        </h1>
+-        <p className="text-base md:text-lg opacity-90 max-w-xl mx-auto">
+-          {GYM_TAGLINE}
+-        </p>
+-      </div>
+-
+-      <div className="flex flex-col sm:flex-row gap-4 justify-center">
+-        <Link href="/checkin">
+-          <Button size="lg" className="gap-2 w-full sm:w-auto">
+-            <QrCode className="size-4" />
+-            Check in
+-          </Button>
+-        </Link>
+-        <Link href="/admin">
+-          <Button size="lg" variant="secondary" className="gap-2 w-full sm:w-auto">
+-            <ShieldCheck className="size-4" />
+-            Admin dashboard
+-          </Button>
+-        </Link>
+-      </div>
+-    </div>
+-  );
++  redirect(user ? "/admin" : "/login");
+ }
+diff --git a/app/visit/page.tsx b/app/visit/page.tsx
+index e5063a3..b768a58 100644
+--- a/app/visit/page.tsx
++++ b/app/visit/page.tsx
+@@ -56,7 +56,7 @@ export default function VisitPage() {
+                 onChange={(e) => setEmail(e.target.value)}
+               />
+               {error && <Alert variant="destructive">{error}</Alert>}
+-              <Button type="submit" disabled={isPending} size="lg" className="w-full">
++              <Button type="submit" loading={isPending} size="lg" className="w-full">
+                 {isPending ? "Submitting..." : "Submit"}
+               </Button>
+             </form>
+diff --git a/components/header-auth.tsx b/components/header-auth.tsx
+index f34bee2..4796dbb 100644
+--- a/components/header-auth.tsx
++++ b/components/header-auth.tsx
+@@ -24,9 +24,11 @@ export default function HeaderAuth({ email }: { email: string | null }) {
+   }
+ 
+   return (
+-    <div className="flex items-center gap-3 text-sm">
+-      <span className="text-muted-foreground">{email}</span>
+-      <Button variant="secondary" onClick={signOut}>
++    <div className="flex items-center gap-2 sm:gap-3 text-sm min-w-0">
++      <span className="hidden sm:inline text-muted-foreground truncate max-w-[40vw]">
++        {email}
++      </span>
++      <Button variant="secondary" size="sm" onClick={signOut} className="shrink-0">
+         Sign out
+       </Button>
+     </div>
+diff --git a/components/ui/button.tsx b/components/ui/button.tsx
+index a2df8dc..83a4719 100644
+--- a/components/ui/button.tsx
++++ b/components/ui/button.tsx
+@@ -1,6 +1,7 @@
+ import * as React from "react"
+ import { Slot } from "@radix-ui/react-slot"
+ import { cva, type VariantProps } from "class-variance-authority"
++import { Loader2 } from "lucide-react"
+ 
+ import { cn } from "@/lib/utils"
+ 
+@@ -40,10 +41,16 @@ function Button({
+   variant,
+   size,
+   asChild = false,
++  loading = false,
++  disabled,
++  children,
+   ...props
+ }: React.ComponentProps<"button"> &
+   VariantProps<typeof buttonVariants> & {
+     asChild?: boolean
++    /** Shows a spinner and disables the button — the standard way to signal
++     * that an async action (form submit, sign-in, etc) is in flight. */
++    loading?: boolean
+   }) {
+   const Comp = asChild ? Slot : "button"
+ 
+@@ -51,8 +58,13 @@ function Button({
+     <Comp
+       data-slot="button"
+       className={cn(buttonVariants({ variant, size, className }))}
++      disabled={disabled || loading}
++      aria-busy={loading || undefined}
+       {...props}
+-    />
++    >
++      {loading && <Loader2 className="animate-spin" />}
++      {children}
++    </Comp>
+   )
+ }
+ 

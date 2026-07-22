@@ -56,7 +56,7 @@ export default function VisitPage() {
                 onChange={(e) => setEmail(e.target.value)}
               />
               {error && <Alert variant="destructive">{error}</Alert>}
-              <Button type="submit" disabled={isPending} size="lg" className="w-full">
+              <Button type="submit" loading={isPending} size="lg" className="w-full">
                 {isPending ? "Submitting..." : "Submit"}
               </Button>
             </form>
