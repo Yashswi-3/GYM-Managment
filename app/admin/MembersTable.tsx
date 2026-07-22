@@ -34,19 +34,14 @@ const filterLabels: Record<MemberFilter, string> = {
 
 export default function MembersTable({
   rows,
-  filter: controlledFilter,
+  filter,
   onFilterChange,
 }: {
   rows: MemberRow[];
-  /** Pass this + onFilterChange to drive the filter from outside (e.g. a
-   * stat card click). Omit both to let the table manage its own filter. */
-  filter?: MemberFilter;
-  onFilterChange?: (filter: MemberFilter) => void;
+  filter: MemberFilter;
+  onFilterChange: (filter: MemberFilter) => void;
 }) {
   const [search, setSearch] = useState("");
-  const [internalFilter, setInternalFilter] = useState<MemberFilter>("all");
-  const filter = controlledFilter ?? internalFilter;
-  const setFilter = onFilterChange ?? setInternalFilter;
 
   const filtered = rows.filter((r) => {
     if (filter === "paid" && !r.paidThisMonth) return false;
@@ -74,7 +69,7 @@ export default function MembersTable({
             type="button"
             size="sm"
             variant={filter === f ? "default" : "secondary"}
-            onClick={() => setFilter(f)}
+            onClick={() => onFilterChange(f)}
             className={cn(filter === f && "pointer-events-none")}
           >
             {filterLabels[f]}

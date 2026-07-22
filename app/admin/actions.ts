@@ -210,8 +210,6 @@ export async function setMemberActiveOverride(formData: FormData) {
   return { ok: true };
 }
 
-export const toggleMemberActive = setMemberActiveOverride;
-
 const updateMemberSchema = z.object({
   memberId: z.string().uuid(),
   name: z.string().trim().min(1, "Name is required"),

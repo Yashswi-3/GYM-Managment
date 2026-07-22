@@ -1,63 +1,39 @@
-# Fitness Center & Gym App 🏋️‍♂️
+# Being Fit — Gym Management
 
-A **full-stack gym and fitness center app** built with **Next.js 15**, **Supabase**, **Clerk**, and **Stripe**. Manage memberships, subscriptions, and user profiles with a modern, scalable stack and beautiful UI.
+A lightweight gym management app for a single gym: an admin panel (members, payments, attendance), three public QR-code entry points for check-in and self-signup, and automated email notifications for upcoming expiry and inactivity.
 
-## 🔍 Description
+## Tech Stack
 
-This project is a feature-rich gym management platform, supporting:
-- **Authentication** (Clerk)
-- **Subscription management** (Stripe + Supabase)
-- **Admin dashboard** for user and subscription control
-- **Profile management**
-- **Responsive UI** with Tailwind CSS and ShadCN
+- **Next.js (App Router)**, TypeScript throughout
+- **Supabase** — Postgres + Auth + Row-Level Security
+- **Vercel** hosting, with Vercel Cron driving the daily notification job (see `vercel.json`)
+- **Resend** for transactional email
+- **shadcn/ui** + Tailwind CSS v4 for the UI
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 .
-├── app/           # Next.js app directory (pages, layouts, API routes)
-├── lib/           # Client utilities (Supabase, etc.)
-├── public/        # Static assets
-└── ...            # Config, styles, etc.
+├── app/                  # Next.js app directory (pages, layouts, server actions, API routes)
+│   ├── admin/            # Admin panel (members, payments, attendance, visitors)
+│   ├── checkin/          # Public QR check-in flow
+│   ├── join/             # Public member self-signup
+│   ├── visit/             # Public visitor self-registration
+│   └── api/notifications/ # Daily cron job (expiry/inactivity emails)
+├── lib/                  # Supabase clients, status derivation, phone normalization, email, device tokens
+├── supabase/migrations/  # SQL migrations (source of truth for the schema)
+└── public/               # Static assets
 ```
 
-## 🚀 Features
-
-- **Clerk authentication** (sign up, sign in, user roles)
-- **Stripe-powered subscriptions** (monthly, quarterly, yearly, etc.)
-- **Admin dashboard** (manage users, subscriptions, analytics)
-- **Profile management** (update name, avatar, etc.)
-- **Subscription history** and status
-- **Responsive UI** (Tailwind CSS + ShadCN UI)
-- **State management** with Zustand
-- **Analytics & CSV export** for admins
-
-## 🛠️ Tech Stack
-
-- **Next.js 15** (App Router, Server Actions)
-- **React 19**
-- **Supabase** (database, storage)
-- **Clerk** (authentication)
-- **Stripe** (payments & subscriptions)
-- **Tailwind CSS**
-- **ShadCN UI**
-
-## ⚙️ Installation
-
-### 1. Clone the Repo
+## Installation
 
 ```bash
-git clone https://github.com/andrew-dev-p/supabase-gym-app
-cd supabase-gym-app
-```
-
-### 2. Install Dependencies
-
-```bash
+git clone https://github.com/Yashswi-3/GYM-Managment
+cd GYM-Managment
 npm install
 ```
 
-## 🧪 Running Locally
+## Running Locally
 
 ```bash
 npm run dev
@@ -65,17 +41,22 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## 🔐 Environment Variables
+## Environment Variables
 
 Create a `.env.local` file in the root:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
-CLERK_SECRET_KEY=your_clerk_secret_key
-STRIPE_SECRET_KEY=your_stripe_secret_key
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key
-STRIPE_WEBHOOK_SECRET=your_stripe_webhook_secret
-NEXT_PUBLIC_BASE_URL=http://localhost:3000
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+RESEND_API_KEY=your_resend_api_key
+NOTIFICATIONS_FROM_EMAIL=your_notifications_from_address
+OWNER_EMAIL=your_gym_owner_email
+
+CRON_SECRET=your_cron_secret
 ```
+
+## Auth Model
+
+The gym owner is the single Supabase Auth user — any authenticated session is treated as admin. Public routes (`/checkin`, `/join`, `/visit`) never touch Supabase tables directly from the client; all reads/writes go through server actions using the service-role key.
