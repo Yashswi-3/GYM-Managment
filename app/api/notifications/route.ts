@@ -7,12 +7,13 @@ export const dynamic = "force-dynamic";
 
 const OWNER_EMAIL = process.env.OWNER_EMAIL ?? "owner@example.com";
 
-type TriggerType = "expiry_3" | "expiry_2" | "expiry_1" | "inactive_7";
+type TriggerType = "expiry_3" | "expiry_2" | "expiry_1" | "expiry_0" | "inactive_7";
 
 const EXPIRY_TRIGGER_BY_DAYS: Record<number, TriggerType> = {
   3: "expiry_3",
   2: "expiry_2",
   1: "expiry_1",
+  0: "expiry_0",
 };
 
 /**
@@ -46,14 +47,21 @@ export async function GET(request: NextRequest) {
     const checkins = (member.attendance ?? []).map((a: { checked_in_at: string }) => a.checked_in_at);
     const lastCheckin = checkins.sort().at(-1) ?? null;
 
-    // --- FR10: expiry warnings at 3, 2, 1 day(s) remaining ---
+    // --- FR10: expiry warnings at 3, 2, 1 day(s) remaining, plus the day
+    // the membership actually lapses (0 remaining) ---
     if (latestValidUntil) {
       const remaining = daysUntil(latestValidUntil, now);
       const trigger = EXPIRY_TRIGGER_BY_DAYS[remaining];
       if (trigger) {
         const sent = await sendIfNotAlreadySent(supabase, member.id, trigger, () => {
-          const subject = `Your membership expires in ${remaining} day${remaining === 1 ? "" : "s"}`;
-          const body = `Hi ${member.name}, your gym membership expires in ${remaining} day${remaining === 1 ? "" : "s"}. Renew soon to avoid a lapse.`;
+          const subject =
+            remaining === 0
+              ? "Your membership has ended today"
+              : `Your membership expires in ${remaining} day${remaining === 1 ? "" : "s"}`;
+          const body =
+            remaining === 0
+              ? `Hi ${member.name}, your gym membership ended today and hasn't been renewed. Renew now to keep your access active.`
+              : `Hi ${member.name}, your gym membership expires in ${remaining} day${remaining === 1 ? "" : "s"}. Renew soon to avoid a lapse.`;
           return notifyBoth(member.email, subject, body, member.name);
         });
         if (sent) sentCount++;

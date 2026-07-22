@@ -10,6 +10,8 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type { MemberStatus } from "@/lib/status";
 
 export interface MemberRow {
@@ -23,7 +25,10 @@ export interface MemberRow {
   tenureDays: number;
   lastSeen: string | null;
   inactive7: boolean;
+  paidThisMonth: boolean;
 }
+
+export type MemberFilter = "all" | "paid" | "unpaid";
 
 const statusStyles: Record<MemberStatus, string> = {
   pending: "bg-muted text-muted-foreground",
@@ -39,10 +44,31 @@ const statusLabels: Record<MemberStatus, string> = {
   expired: "Expired",
 };
 
-export default function MembersTable({ rows }: { rows: MemberRow[] }) {
+const filterLabels: Record<MemberFilter, string> = {
+  all: "All",
+  paid: "Paid this month",
+  unpaid: "Unpaid this month",
+};
+
+export default function MembersTable({
+  rows,
+  filter: controlledFilter,
+  onFilterChange,
+}: {
+  rows: MemberRow[];
+  /** Pass this + onFilterChange to drive the filter from outside (e.g. a
+   * stat card click). Omit both to let the table manage its own filter. */
+  filter?: MemberFilter;
+  onFilterChange?: (filter: MemberFilter) => void;
+}) {
   const [search, setSearch] = useState("");
+  const [internalFilter, setInternalFilter] = useState<MemberFilter>("all");
+  const filter = controlledFilter ?? internalFilter;
+  const setFilter = onFilterChange ?? setInternalFilter;
 
   const filtered = rows.filter((r) => {
+    if (filter === "paid" && !r.paidThisMonth) return false;
+    if (filter === "unpaid" && r.paidThisMonth) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return r.name.toLowerCase().includes(q) || r.mobile.includes(q);
@@ -58,6 +84,20 @@ export default function MembersTable({ rows }: { rows: MemberRow[] }) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {(Object.keys(filterLabels) as MemberFilter[]).map((f) => (
+          <Button
+            key={f}
+            type="button"
+            size="sm"
+            variant={filter === f ? "default" : "secondary"}
+            onClick={() => setFilter(f)}
+            className={cn(filter === f && "pointer-events-none")}
+          >
+            {filterLabels[f]}
+          </Button>
+        ))}
       </div>
       <Table>
         <TableHeader>
@@ -75,7 +115,7 @@ export default function MembersTable({ rows }: { rows: MemberRow[] }) {
           {filtered.length === 0 ? (
             <TableRow>
               <TableCell colSpan={7} className="text-center text-muted-foreground">
-                No members yet.
+                {rows.length === 0 ? "No members yet." : "No members match this filter."}
               </TableCell>
             </TableRow>
           ) : (

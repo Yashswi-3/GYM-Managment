@@ -73,6 +73,10 @@ export default async function AdminDashboard() {
       tenureDays: daysSince(m.join_date, now),
       lastSeen,
       inactive7: lastSeen ? daysSince(lastSeen, now) >= 7 : true,
+      // Distinct from `status`: whether they have a payment dated within the
+      // *current calendar month* specifically, which is what the "Paid this
+      // month" / "Unpaid this month" stat cards count and filter by.
+      paidThisMonth: paidThisMonthMembers.has(m.id),
     };
   });
 

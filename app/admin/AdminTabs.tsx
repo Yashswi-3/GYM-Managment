@@ -8,7 +8,7 @@ import QRCard from "./QRCard";
 import ActivityFeed, { type ActivityRow } from "./ActivityFeed";
 import PendingSignups, { type PendingMember } from "./PendingSignups";
 import AddMemberForm from "./AddMemberForm";
-import MembersTable, { type MemberRow } from "./MembersTable";
+import MembersTable, { type MemberRow, type MemberFilter } from "./MembersTable";
 import AddVisitorForm from "./AddVisitorForm";
 import VisitorsTable, { type VisitorRow } from "./VisitorsTable";
 
@@ -36,6 +36,12 @@ export default function AdminTabs({
   visitorRows: VisitorRow[];
 }) {
   const [tab, setTab] = useState<Tab>("overview");
+  const [memberFilter, setMemberFilter] = useState<MemberFilter>("all");
+
+  function goToMembersFiltered(filter: MemberFilter) {
+    setMemberFilter(filter);
+    setTab("members");
+  }
 
   const tabs = [
     { id: "overview" as const, label: "Overview", icon: LayoutDashboard },
@@ -75,6 +81,7 @@ export default function AdminTabs({
             unpaidCount={unpaidCount}
             visitorCount={visitorCount}
             convertedCount={convertedCount}
+            onFilterSelect={goToMembersFiltered}
           />
           <div className="flex flex-wrap gap-3">
             <QRCard path="/checkin" label="Daily check-in" filename="gym-checkin-qr.png" />
@@ -89,7 +96,7 @@ export default function AdminTabs({
         <div className="space-y-6">
           <PendingSignups members={pendingMembers} />
           <AddMemberForm />
-          <MembersTable rows={memberRows} />
+          <MembersTable rows={memberRows} filter={memberFilter} onFilterChange={setMemberFilter} />
         </div>
       )}
 

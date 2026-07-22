@@ -1,0 +1,284 @@
+diff --git a/app/admin/AdminTabs.tsx b/app/admin/AdminTabs.tsx
+index 153e162..e42c62b 100644
+--- a/app/admin/AdminTabs.tsx
++++ b/app/admin/AdminTabs.tsx
+@@ -8,7 +8,7 @@ import QRCard from "./QRCard";
+ import ActivityFeed, { type ActivityRow } from "./ActivityFeed";
+ import PendingSignups, { type PendingMember } from "./PendingSignups";
+ import AddMemberForm from "./AddMemberForm";
+-import MembersTable, { type MemberRow } from "./MembersTable";
++import MembersTable, { type MemberRow, type MemberFilter } from "./MembersTable";
+ import AddVisitorForm from "./AddVisitorForm";
+ import VisitorsTable, { type VisitorRow } from "./VisitorsTable";
+ 
+@@ -36,6 +36,12 @@ export default function AdminTabs({
+   visitorRows: VisitorRow[];
+ }) {
+   const [tab, setTab] = useState<Tab>("overview");
++  const [memberFilter, setMemberFilter] = useState<MemberFilter>("all");
++
++  function goToMembersFiltered(filter: MemberFilter) {
++    setMemberFilter(filter);
++    setTab("members");
++  }
+ 
+   const tabs = [
+     { id: "overview" as const, label: "Overview", icon: LayoutDashboard },
+@@ -75,6 +81,7 @@ export default function AdminTabs({
+             unpaidCount={unpaidCount}
+             visitorCount={visitorCount}
+             convertedCount={convertedCount}
++            onFilterSelect={goToMembersFiltered}
+           />
+           <div className="flex flex-wrap gap-3">
+             <QRCard path="/checkin" label="Daily check-in" filename="gym-checkin-qr.png" />
+@@ -89,7 +96,7 @@ export default function AdminTabs({
+         <div className="space-y-6">
+           <PendingSignups members={pendingMembers} />
+           <AddMemberForm />
+-          <MembersTable rows={memberRows} />
++          <MembersTable rows={memberRows} filter={memberFilter} onFilterChange={setMemberFilter} />
+         </div>
+       )}
+ 
+diff --git a/app/admin/MembersTable.tsx b/app/admin/MembersTable.tsx
+index c4762d4..0be7f01 100644
+--- a/app/admin/MembersTable.tsx
++++ b/app/admin/MembersTable.tsx
+@@ -10,6 +10,8 @@ import {
+   TableCell,
+ } from "@/components/ui/table";
+ import { Input } from "@/components/ui/input";
++import { Button } from "@/components/ui/button";
++import { cn } from "@/lib/utils";
+ import type { MemberStatus } from "@/lib/status";
+ 
+ export interface MemberRow {
+@@ -23,8 +25,11 @@ export interface MemberRow {
+   tenureDays: number;
+   lastSeen: string | null;
+   inactive7: boolean;
++  paidThisMonth: boolean;
+ }
+ 
++export type MemberFilter = "all" | "paid" | "unpaid";
++
+ const statusStyles: Record<MemberStatus, string> = {
+   pending: "bg-muted text-muted-foreground",
+   active: "bg-[oklch(0.75_0.12_145_/_0.18)] text-[oklch(0.8_0.15_145)]",
+@@ -39,10 +44,31 @@ const statusLabels: Record<MemberStatus, string> = {
+   expired: "Expired",
+ };
+ 
+-export default function MembersTable({ rows }: { rows: MemberRow[] }) {
++const filterLabels: Record<MemberFilter, string> = {
++  all: "All",
++  paid: "Paid this month",
++  unpaid: "Unpaid this month",
++};
++
++export default function MembersTable({
++  rows,
++  filter: controlledFilter,
++  onFilterChange,
++}: {
++  rows: MemberRow[];
++  /** Pass this + onFilterChange to drive the filter from outside (e.g. a
++   * stat card click). Omit both to let the table manage its own filter. */
++  filter?: MemberFilter;
++  onFilterChange?: (filter: MemberFilter) => void;
++}) {
+   const [search, setSearch] = useState("");
++  const [internalFilter, setInternalFilter] = useState<MemberFilter>("all");
++  const filter = controlledFilter ?? internalFilter;
++  const setFilter = onFilterChange ?? setInternalFilter;
+ 
+   const filtered = rows.filter((r) => {
++    if (filter === "paid" && !r.paidThisMonth) return false;
++    if (filter === "unpaid" && r.paidThisMonth) return false;
+     if (!search) return true;
+     const q = search.toLowerCase();
+     return r.name.toLowerCase().includes(q) || r.mobile.includes(q);
+@@ -59,6 +85,20 @@ export default function MembersTable({ rows }: { rows: MemberRow[] }) {
+           onChange={(e) => setSearch(e.target.value)}
+         />
+       </div>
++      <div className="flex flex-wrap gap-2">
++        {(Object.keys(filterLabels) as MemberFilter[]).map((f) => (
++          <Button
++            key={f}
++            type="button"
++            size="sm"
++            variant={filter === f ? "default" : "secondary"}
++            onClick={() => setFilter(f)}
++            className={cn(filter === f && "pointer-events-none")}
++          >
++            {filterLabels[f]}
++          </Button>
++        ))}
++      </div>
+       <Table>
+         <TableHeader>
+           <TableRow>
+@@ -75,7 +115,7 @@ export default function MembersTable({ rows }: { rows: MemberRow[] }) {
+           {filtered.length === 0 ? (
+             <TableRow>
+               <TableCell colSpan={7} className="text-center text-muted-foreground">
+-                No members yet.
++                {rows.length === 0 ? "No members yet." : "No members match this filter."}
+               </TableCell>
+             </TableRow>
+           ) : (
+diff --git a/app/admin/StatsCards.tsx b/app/admin/StatsCards.tsx
+index 1c13105..648ce1e 100644
+--- a/app/admin/StatsCards.tsx
++++ b/app/admin/StatsCards.tsx
+@@ -1,6 +1,7 @@
+ import { Card } from "@/components/ui/card";
+ import { Users, CreditCard, UserX, Sparkles, Repeat } from "lucide-react";
+ import type { LucideIcon } from "lucide-react";
++import type { MemberFilter } from "./MembersTable";
+ 
+ export default function StatsCards({
+   totalMembers,
+@@ -8,17 +9,26 @@ export default function StatsCards({
+   unpaidCount,
+   visitorCount,
+   convertedCount,
++  onFilterSelect,
+ }: {
+   totalMembers: number;
+   paidCount: number;
+   unpaidCount: number;
+   visitorCount: number;
+   convertedCount: number;
++  /** Clicking Total/Paid/Unpaid jumps to the Members tab pre-filtered. */
++  onFilterSelect?: (filter: MemberFilter) => void;
+ }) {
+-  const stats: { label: string; value: string | number; icon: LucideIcon; tone?: "warn" }[] = [
+-    { label: "Total members", value: totalMembers, icon: Users },
+-    { label: "Paid this month", value: paidCount, icon: CreditCard },
+-    { label: "Unpaid this month", value: unpaidCount, icon: UserX, tone: "warn" },
++  const stats: {
++    label: string;
++    value: string | number;
++    icon: LucideIcon;
++    tone?: "warn";
++    filter?: MemberFilter;
++  }[] = [
++    { label: "Total members", value: totalMembers, icon: Users, filter: "all" },
++    { label: "Paid this month", value: paidCount, icon: CreditCard, filter: "paid" },
++    { label: "Unpaid this month", value: unpaidCount, icon: UserX, tone: "warn", filter: "unpaid" },
+     { label: "Visitors (all time)", value: visitorCount, icon: Sparkles },
+     {
+       label: "Visitor → member conversion",
+@@ -29,13 +39,29 @@ export default function StatsCards({
+ 
+   return (
+     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+-      {stats.map((s) => (
+-        <Card key={s.label} className="p-4 border-border/60">
+-          <s.icon className={`size-4 mb-2 ${s.tone === "warn" ? "text-destructive" : "text-primary"}`} />
+-          <div className="text-2xl font-display font-semibold">{s.value}</div>
+-          <div className="text-xs text-muted-foreground">{s.label}</div>
+-        </Card>
+-      ))}
++      {stats.map((s) => {
++        const clickable = !!s.filter && !!onFilterSelect;
++        return (
++          <Card
++            key={s.label}
++            className={`p-4 border-border/60 ${clickable ? "text-left cursor-pointer transition-colors hover:border-primary/50 hover:bg-accent/40" : ""}`}
++            {...(clickable
++              ? {
++                  role: "button",
++                  tabIndex: 0,
++                  onClick: () => onFilterSelect!(s.filter!),
++                  onKeyDown: (e: React.KeyboardEvent) => {
++                    if (e.key === "Enter" || e.key === " ") onFilterSelect!(s.filter!);
++                  },
++                }
++              : {})}
++          >
++            <s.icon className={`size-4 mb-2 ${s.tone === "warn" ? "text-destructive" : "text-primary"}`} />
++            <div className="text-2xl font-display font-semibold">{s.value}</div>
++            <div className="text-xs text-muted-foreground">{s.label}</div>
++          </Card>
++        );
++      })}
+     </div>
+   );
+ }
+diff --git a/app/admin/page.tsx b/app/admin/page.tsx
+index 05ecb67..b6f8d98 100644
+--- a/app/admin/page.tsx
++++ b/app/admin/page.tsx
+@@ -73,6 +73,10 @@ export default async function AdminDashboard() {
+       tenureDays: daysSince(m.join_date, now),
+       lastSeen,
+       inactive7: lastSeen ? daysSince(lastSeen, now) >= 7 : true,
++      // Distinct from `status`: whether they have a payment dated within the
++      // *current calendar month* specifically, which is what the "Paid this
++      // month" / "Unpaid this month" stat cards count and filter by.
++      paidThisMonth: paidThisMonthMembers.has(m.id),
+     };
+   });
+ 
+diff --git a/app/api/notifications/route.ts b/app/api/notifications/route.ts
+index 78cab89..e508b0b 100644
+--- a/app/api/notifications/route.ts
++++ b/app/api/notifications/route.ts
+@@ -7,12 +7,13 @@ export const dynamic = "force-dynamic";
+ 
+ const OWNER_EMAIL = process.env.OWNER_EMAIL ?? "owner@example.com";
+ 
+-type TriggerType = "expiry_3" | "expiry_2" | "expiry_1" | "inactive_7";
++type TriggerType = "expiry_3" | "expiry_2" | "expiry_1" | "expiry_0" | "inactive_7";
+ 
+ const EXPIRY_TRIGGER_BY_DAYS: Record<number, TriggerType> = {
+   3: "expiry_3",
+   2: "expiry_2",
+   1: "expiry_1",
++  0: "expiry_0",
+ };
+ 
+ /**
+@@ -46,14 +47,21 @@ export async function GET(request: NextRequest) {
+     const checkins = (member.attendance ?? []).map((a: { checked_in_at: string }) => a.checked_in_at);
+     const lastCheckin = checkins.sort().at(-1) ?? null;
+ 
+-    // --- FR10: expiry warnings at 3, 2, 1 day(s) remaining ---
++    // --- FR10: expiry warnings at 3, 2, 1 day(s) remaining, plus the day
++    // the membership actually lapses (0 remaining) ---
+     if (latestValidUntil) {
+       const remaining = daysUntil(latestValidUntil, now);
+       const trigger = EXPIRY_TRIGGER_BY_DAYS[remaining];
+       if (trigger) {
+         const sent = await sendIfNotAlreadySent(supabase, member.id, trigger, () => {
+-          const subject = `Your membership expires in ${remaining} day${remaining === 1 ? "" : "s"}`;
+-          const body = `Hi ${member.name}, your gym membership expires in ${remaining} day${remaining === 1 ? "" : "s"}. Renew soon to avoid a lapse.`;
++          const subject =
++            remaining === 0
++              ? "Your membership has ended today"
++              : `Your membership expires in ${remaining} day${remaining === 1 ? "" : "s"}`;
++          const body =
++            remaining === 0
++              ? `Hi ${member.name}, your gym membership ended today and hasn't been renewed. Renew now to keep your access active.`
++              : `Hi ${member.name}, your gym membership expires in ${remaining} day${remaining === 1 ? "" : "s"}. Renew soon to avoid a lapse.`;
+           return notifyBoth(member.email, subject, body, member.name);
+         });
+         if (sent) sentCount++;
+diff --git a/supabase/migrations/0006_expiry_0_trigger.sql b/supabase/migrations/0006_expiry_0_trigger.sql
+new file mode 100644
+index 0000000..aadf507
+--- /dev/null
++++ b/supabase/migrations/0006_expiry_0_trigger.sql
+@@ -0,0 +1,8 @@
++-- Adds a 4th expiry notification trigger for the day the membership actually
++-- lapses (0 days remaining), completing the 3/2/1/0 sequence. Previously the
++-- job only warned at 3, 2, and 1 day(s) remaining and stayed silent once the
++-- membership had actually expired.
++alter table notification_log drop constraint if exists notification_log_trigger_type_check;
++alter table notification_log add constraint notification_log_trigger_type_check check (
++  trigger_type in ('expiry_3', 'expiry_2', 'expiry_1', 'expiry_0', 'inactive_7')
++);
