@@ -6,7 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint . --ignore-pattern .next --ignore-pattern node_modules"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.3",

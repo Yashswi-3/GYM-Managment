@@ -131,7 +131,7 @@ export default async function AdminDashboard() {
   }));
 
   const totalMembers = memberRows.length;
-  const paidCount = paidThisMonthMembers.size;
+  const paidCount = memberRows.filter((member) => member.paidThisMonth).length;
   const unpaidCount = totalMembers - paidCount;
 
   return (
