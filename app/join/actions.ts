@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/server";
 import { normalizeMobile } from "@/lib/phone";
 import { rememberDeviceForMember } from "@/lib/deviceToken";
@@ -18,11 +19,23 @@ const joinSchema = z.object({
  * the owner adds an amount and valid-until date — the admin never has to
  * hand-type the name/mobile themselves. Also remembers this browser so
  * future /checkin visits skip straight to attendance with no form at all.
+ *
+ * Bound directly to the <form action={...}> (see app/join/page.tsx) rather
+ * than called from a client onSubmit handler. That's what makes this a
+ * true no-JS-required submission: on a slow/flaky connection where the
+ * page's JS bundle never loads or hydrates, the browser still does a plain
+ * HTML POST straight to this function and the signup still saves — instead
+ * of silently doing nothing, which is what a JS-only onClick handler does
+ * when the JS never arrives.
  */
-export async function joinAsMember(nameInput: string, mobileInput: string, emailInput: string) {
-  const parsed = joinSchema.safeParse({ name: nameInput, mobile: mobileInput, email: emailInput });
+export async function joinAsMember(formData: FormData) {
+  const parsed = joinSchema.safeParse({
+    name: formData.get("name"),
+    mobile: formData.get("mobile"),
+    email: formData.get("email"),
+  });
   if (!parsed.success) {
-    return { ok: false as const, error: parsed.error.issues[0].message };
+    redirect(`/join?error=${encodeURIComponent(parsed.error.issues[0].message)}`);
   }
 
   const supabase = await createServiceClient();
@@ -37,7 +50,7 @@ export async function joinAsMember(nameInput: string, mobileInput: string, email
 
   if (existing) {
     await rememberDeviceForMember(existing.id);
-    return { ok: true as const, alreadyRegistered: true as const, name };
+    redirect(`/join?done=1&already=1&name=${encodeURIComponent(name)}`);
   }
 
   const { data: created, error } = await supabase
@@ -45,9 +58,10 @@ export async function joinAsMember(nameInput: string, mobileInput: string, email
     .insert({ name, mobile, email })
     .select("id")
     .single();
-  if (error || !created) return { ok: false as const, error: error?.message ?? "Could not sign up" };
+  if (error || !created) {
+    redirect(`/join?error=${encodeURIComponent(error?.message ?? "Could not sign up")}`);
+  }
 
   await rememberDeviceForMember(created.id);
-
-  return { ok: true as const, alreadyRegistered: false as const, name };
+  redirect(`/join?done=1&already=0&name=${encodeURIComponent(name)}`);
 }

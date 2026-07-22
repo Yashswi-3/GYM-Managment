@@ -1,33 +1,20 @@
-"use client";
-
-import { useState, useTransition } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { FormSubmitButton } from "@/components/form-submit-button";
 import { Sparkles, CheckCircle2 } from "lucide-react";
 import { registerAsVisitor } from "./actions";
 
-export default function VisitPage() {
-  const [name, setName] = useState("");
-  const [mobile, setMobile] = useState("");
-  const [email, setEmail] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ name: string; alreadyMember: boolean } | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    startTransition(async () => {
-      const result = await registerAsVisitor(name, mobile, email);
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setDone({ name: result.name, alreadyMember: result.alreadyMember });
-    });
-  }
+export default async function VisitPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ done?: string; already?: string; name?: string; error?: string }>;
+}) {
+  const sp = await searchParams;
+  const done = sp.done === "1";
+  const name = sp.name ?? "";
+  const alreadyMember = sp.already === "1";
+  const error = sp.error;
 
   return (
     <div className="container max-w-sm py-16 md:py-24">
@@ -39,36 +26,22 @@ export default function VisitPage() {
             <p className="text-sm text-muted-foreground mb-6">
               Just your details — no commitment, we&apos;re glad you&apos;re here
             </p>
-            <form onSubmit={handleSubmit} className="space-y-3 text-left">
-              <Input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required />
-              <Input
-                type="tel"
-                inputMode="numeric"
-                placeholder="Mobile number"
-                value={mobile}
-                onChange={(e) => setMobile(e.target.value)}
-                required
-              />
-              <Input
-                type="email"
-                placeholder="Email (optional)"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+            <form action={registerAsVisitor} className="space-y-3 text-left">
+              <Input name="name" placeholder="Name" required />
+              <Input type="tel" inputMode="numeric" name="mobile" placeholder="Mobile number" required />
+              <Input type="email" name="email" placeholder="Email (optional)" />
               {error && <Alert variant="destructive">{error}</Alert>}
-              <Button type="submit" loading={isPending} size="lg" className="w-full">
-                {isPending ? "Submitting..." : "Submit"}
-              </Button>
+              <FormSubmitButton label="Submit" pendingLabel="Submitting..." className="w-full" />
             </form>
           </>
         ) : (
           <>
             <CheckCircle2 className="size-10 text-primary mx-auto mb-4" strokeWidth={2} />
             <h1 className="font-display text-2xl font-semibold mb-1">
-              {done.alreadyMember ? `You're already a member, ${done.name}!` : `Thanks, ${done.name}!`}
+              {alreadyMember ? `You're already a member, ${name}!` : `Thanks, ${name}!`}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {done.alreadyMember
+              {alreadyMember
                 ? "Use the regular check-in poster to mark yourself present."
                 : "Enjoy your visit — see you around!"}
             </p>
