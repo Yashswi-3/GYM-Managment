@@ -8,7 +8,13 @@ import { Alert } from "@/components/ui/alert";
 import { Dumbbell, CheckCircle2, UserPlus, Loader2 } from "lucide-react";
 import { lookupMobile, checkInMember, registerVisitor, attemptDeviceCheckIn } from "./actions";
 
-type Stage = "checking-device" | "enter-mobile" | "confirm-member" | "register-visitor" | "done";
+type Stage =
+  | "checking-device"
+  | "enter-mobile"
+  | "confirm-member"
+  | "register-visitor"
+  | "done"
+  | "done-auto";
 
 export default function CheckInPage() {
   const [stage, setStage] = useState<Stage>("checking-device");
@@ -27,7 +33,7 @@ export default function CheckInPage() {
       if (cancelled) return;
       if (result.ok) {
         setGreeting(result.name);
-        setStage("done");
+        setStage("done-auto");
       } else {
         setStage("enter-mobile");
       }
@@ -157,6 +163,16 @@ export default function CheckInPage() {
                 {isPending ? "Saving..." : "Register"}
               </Button>
             </form>
+          </>
+        )}
+
+        {stage === "done-auto" && (
+          <>
+            <CheckCircle2 className="size-10 text-primary mx-auto mb-4" strokeWidth={2} />
+            <h1 className="font-display text-2xl font-semibold mb-1">
+              Welcome back{greeting ? `, ${greeting}` : ""}!
+            </h1>
+            <p className="text-sm text-muted-foreground">You&apos;re checked in. See you on the floor.</p>
           </>
         )}
 

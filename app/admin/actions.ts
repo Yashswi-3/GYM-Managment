@@ -17,6 +17,23 @@ const memberPaymentSchema = z.object({
 });
 
 /**
+ * FR6 — a visitor with this mobile number just became a paying member;
+ * link their visitor record so the Visitors tab shows them as converted
+ * instead of still "Visitor". No-op if no matching unconverted visitor exists.
+ */
+async function convertVisitorForMember(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  mobile: string,
+  memberId: string
+) {
+  await supabase
+    .from("visitors")
+    .update({ converted_member_id: memberId })
+    .eq("mobile", mobile)
+    .is("converted_member_id", null);
+}
+
+/**
  * FR1 + FR3 + FR6 — adds a member (or reuses an existing one by mobile),
  * records a payment against them, and — if a visitor record with the same
  * mobile exists and hasn't converted yet — links it. Conversion is implicit:
@@ -71,12 +88,7 @@ export async function addMemberWithPayment(formData: FormData) {
   });
   if (paymentError) return { ok: false, error: paymentError.message };
 
-  // FR6 — implicit visitor -> member conversion.
-  await supabase
-    .from("visitors")
-    .update({ converted_member_id: memberId })
-    .eq("mobile", mobile)
-    .is("converted_member_id", null);
+  await convertVisitorForMember(supabase, mobile, memberId);
 
   revalidatePath("/admin");
   return { ok: true };
@@ -136,16 +148,20 @@ export async function activatePendingMember(formData: FormData) {
   const supabase = await createClient();
   const { memberId, planName, amount, validUntil } = parsed.data;
 
-  const { error: updateError } = await supabase
+  const { data: member, error: memberError } = await supabase
     .from("members")
     .update({ plan_name: planName })
-    .eq("id", memberId);
-  if (updateError) return { ok: false, error: updateError.message };
+    .eq("id", memberId)
+    .select("mobile")
+    .single();
+  if (memberError) return { ok: false, error: memberError.message };
 
   const { error: paymentError } = await supabase
     .from("payments")
     .insert({ member_id: memberId, amount, valid_until: validUntil });
   if (paymentError) return { ok: false, error: paymentError.message };
+
+  await convertVisitorForMember(supabase, member.mobile, memberId);
 
   revalidatePath("/admin");
   return { ok: true };
