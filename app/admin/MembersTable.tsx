@@ -15,6 +15,12 @@ export interface MemberRow {
   email?: string | null;
   joinDate: string;
   planName: string;
+  // The latest payment on file, if any (a pending signup with zero payments
+  // has none yet) — carried here so Edit can correct amount/dates in the
+  // same form as the member's own details, with no separate payment table.
+  paymentId: string | null;
+  amount: number | null;
+  paidOn: string | null;
   validUntil: string | null;
   isActiveOverride: boolean | null;
   status: MemberStatus;

@@ -17,11 +17,13 @@ export interface PendingMember {
 
 function ActivateRow({ member }: { member: PendingMember }) {
   const [error, setError] = useState<string | null>(null);
+  const [paymentDone, setPaymentDone] = useState<"yes" | "no">("yes");
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(formData: FormData) {
     setError(null);
     formData.set("memberId", member.id);
+    formData.set("paymentDone", paymentDone);
     startTransition(async () => {
       const result = await activatePendingMember(formData);
       if (!result.ok) setError(result.error ?? "Something went wrong");
@@ -55,6 +57,24 @@ function ActivateRow({ member }: { member: PendingMember }) {
           className="flex-1 min-w-[140px] sm:flex-none sm:w-40"
           required
         />
+        <div className="flex gap-1">
+          <Button
+            type="button"
+            size="sm"
+            variant={paymentDone === "yes" ? "default" : "secondary"}
+            onClick={() => setPaymentDone("yes")}
+          >
+            Payment Done
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={paymentDone === "no" ? "default" : "secondary"}
+            onClick={() => setPaymentDone("no")}
+          >
+            Payment Not Done
+          </Button>
+        </div>
         <Button type="submit" size="sm" loading={isPending}>
           {isPending ? "Activating..." : "Activate"}
         </Button>

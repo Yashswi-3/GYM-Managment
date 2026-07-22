@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { sendEmail } from "@/lib/email";
+import { notifyMemberAndOwner } from "@/lib/email";
 import { daysUntil, daysSince } from "@/lib/status";
 
 export const dynamic = "force-dynamic";
-
-const OWNER_EMAIL = process.env.OWNER_EMAIL ?? "owner@example.com";
 
 type TriggerType = "expiry_3" | "expiry_2" | "expiry_1" | "expiry_0" | "inactive_7";
 
@@ -62,7 +60,7 @@ export async function GET(request: NextRequest) {
             remaining === 0
               ? `Hi ${member.name}, your gym membership ended today and hasn't been renewed. Renew now to keep your access active.`
               : `Hi ${member.name}, your gym membership expires in ${remaining} day${remaining === 1 ? "" : "s"}. Renew soon to avoid a lapse.`;
-          return notifyBoth(member.email, subject, body, member.name);
+          return notifyMemberAndOwner(member.email, member.name, subject, body);
         });
         if (sent) sentCount++;
       }
@@ -73,24 +71,13 @@ export async function GET(request: NextRequest) {
       const sent = await sendIfNotAlreadySent(supabase, member.id, "inactive_7", () => {
         const subject = "We haven't seen you in a week";
         const body = `Hi ${member.name}, it's been 7 days since your last check-in. Hope to see you back at the gym soon!`;
-        return notifyBoth(member.email, subject, body, member.name);
+        return notifyMemberAndOwner(member.email, member.name, subject, body);
       });
       if (sent) sentCount++;
     }
   }
 
   return NextResponse.json({ sent: sentCount });
-}
-
-async function notifyBoth(
-  memberEmail: string | null,
-  subject: string,
-  body: string,
-  memberName: string
-) {
-  const tasks = [sendEmail(OWNER_EMAIL, `[Gym] ${subject} — ${memberName}`, body)];
-  if (memberEmail) tasks.push(sendEmail(memberEmail, subject, body));
-  await Promise.all(tasks);
 }
 
 async function sendIfNotAlreadySent(

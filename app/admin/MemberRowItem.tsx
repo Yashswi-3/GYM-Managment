@@ -5,7 +5,7 @@ import { TableRow, TableCell } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
-import { setMemberActiveOverride, updateMember, deleteMember } from "./actions";
+import { setMemberActiveOverride, updateMember, deleteMember, recordPayment } from "./actions";
 import type { MemberRow } from "./MembersTable";
 import type { MemberStatus } from "@/lib/status";
 
@@ -17,12 +17,16 @@ const statusStyles: Record<MemberStatus, string> = {
   inactive: "bg-muted text-muted-foreground border border-border/60",
 };
 
+// Payment-workflow wording: Active reads as "Payment Complete"; anything
+// that isn't currently paid up (due soon, overdue, or force-marked
+// incomplete) all read the same "Payment Incomplete" so the table answers
+// one question at a glance — has this person paid or not.
 const statusLabels: Record<MemberStatus, string> = {
   pending: "Pending signup",
-  active: "Active",
-  expiring_soon: "Expiring soon",
-  expired: "Expired",
-  inactive: "Inactive",
+  active: "Payment Complete",
+  expiring_soon: "Payment Incomplete",
+  expired: "Payment Incomplete",
+  inactive: "Payment Incomplete",
 };
 
 function MemberOverrideControls({ member }: { member: MemberRow }) {
@@ -63,7 +67,7 @@ function MemberOverrideControls({ member }: { member: MemberRow }) {
           onClick={() => submit("active")}
           loading={isPending}
         >
-          Active
+          Payment Complete
         </Button>
         <Button
           type="button"
@@ -72,19 +76,52 @@ function MemberOverrideControls({ member }: { member: MemberRow }) {
           onClick={() => submit("inactive")}
           loading={isPending}
         >
-          Inactive
+          Payment Incomplete
         </Button>
       </div>
       <div className="text-[11px] text-muted-foreground">
-        {current === "auto" ? "Derived from latest payment." : `Forced ${current}.`}
+        {current === "auto" ? "Derived from latest payment." : "Forced by admin."}
       </div>
       {error && <Alert variant="destructive">{error}</Alert>}
     </div>
   );
 }
 
+function RenewForm({ memberId, onDone }: { memberId: string; onDone: () => void }) {
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function handleSubmit(formData: FormData) {
+    setError(null);
+    formData.set("memberId", memberId);
+    startTransition(async () => {
+      const result = await recordPayment(formData);
+      if (!result.ok) {
+        setError(result.error ?? "Something went wrong");
+        return;
+      }
+      onDone();
+    });
+  }
+
+  return (
+    <form action={handleSubmit} className="flex flex-wrap items-center gap-2">
+      <Input name="amount" type="number" step="0.01" placeholder="Amount" className="w-28" required />
+      <Input name="validUntil" type="date" className="w-40" required />
+      <Button type="submit" size="sm" loading={isPending}>
+        {isPending ? "Saving..." : "Save"}
+      </Button>
+      <Button type="button" size="sm" variant="secondary" onClick={onDone}>
+        Cancel
+      </Button>
+      {error && <Alert variant="destructive">{error}</Alert>}
+    </form>
+  );
+}
+
 export default function MemberRowItem({ member }: { member: MemberRow }) {
   const [editing, setEditing] = useState(false);
+  const [renewing, setRenewing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -119,10 +156,26 @@ export default function MemberRowItem({ member }: { member: MemberRow }) {
       <TableRow>
         <TableCell colSpan={9} className="py-3">
           <form action={handleUpdate} className="flex flex-wrap items-center gap-2">
+            {member.paymentId && <input type="hidden" name="paymentId" value={member.paymentId} />}
             <Input name="name" defaultValue={member.name} placeholder="Name" className="flex-1 min-w-[120px]" required />
             <Input name="mobile" defaultValue={member.mobile} placeholder="Mobile" className="flex-1 min-w-[120px]" required />
             <Input name="email" defaultValue={member.email ?? ""} placeholder="Email" className="flex-1 min-w-[140px]" />
             <Input name="planName" defaultValue={member.planName} placeholder="Plan" className="flex-1 min-w-[100px]" required />
+            {member.paymentId && (
+              <>
+                <Input
+                  name="amount"
+                  type="number"
+                  step="0.01"
+                  defaultValue={member.amount ?? ""}
+                  placeholder="Amount"
+                  className="w-28"
+                  required
+                />
+                <Input name="paidOn" type="date" defaultValue={member.paidOn ?? ""} className="w-40" required />
+                <Input name="validUntil" type="date" defaultValue={member.validUntil ?? ""} className="w-40" required />
+              </>
+            )}
             <Button type="submit" size="sm" loading={isPending}>
               {isPending ? "Saving..." : "Save"}
             </Button>
@@ -143,6 +196,16 @@ export default function MemberRowItem({ member }: { member: MemberRow }) {
               {error}
             </Alert>
           )}
+        </TableCell>
+      </TableRow>
+    );
+  }
+
+  if (renewing) {
+    return (
+      <TableRow>
+        <TableCell colSpan={9} className="py-3">
+          <RenewForm memberId={member.id} onDone={() => setRenewing(false)} />
         </TableCell>
       </TableRow>
     );
@@ -176,6 +239,11 @@ export default function MemberRowItem({ member }: { member: MemberRow }) {
           <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
             Edit
           </Button>
+          {member.paymentId && (
+            <Button size="sm" variant="secondary" onClick={() => setRenewing(true)}>
+              Renew
+            </Button>
+          )}
           {confirmDelete ? (
             <Button size="sm" variant="destructive" loading={isPending} onClick={handleDelete}>
               {isPending ? "Deleting..." : "Confirm?"}

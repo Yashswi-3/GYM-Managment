@@ -9,7 +9,6 @@ import ActivityFeed, { type ActivityRow } from "./ActivityFeed";
 import PendingSignups, { type PendingMember } from "./PendingSignups";
 import AddMemberForm from "./AddMemberForm";
 import MembersTable, { type MemberRow, type MemberFilter } from "./MembersTable";
-import PaymentHistoryTable, { type PaymentRow } from "./PaymentHistoryTable";
 import AddVisitorForm from "./AddVisitorForm";
 import VisitorsTable, { type VisitorRow } from "./VisitorsTable";
 
@@ -24,7 +23,6 @@ export default function AdminTabs({
   activity,
   pendingMembers,
   memberRows,
-  paymentRows,
   visitorRows,
 }: {
   totalMembers: number;
@@ -35,7 +33,6 @@ export default function AdminTabs({
   activity: ActivityRow[];
   pendingMembers: PendingMember[];
   memberRows: MemberRow[];
-  paymentRows: PaymentRow[];
   visitorRows: VisitorRow[];
 }) {
   const [tab, setTab] = useState<Tab>("overview");
@@ -100,7 +97,6 @@ export default function AdminTabs({
           <PendingSignups members={pendingMembers} />
           <AddMemberForm />
           <MembersTable rows={memberRows} filter={memberFilter} onFilterChange={setMemberFilter} />
-          <PaymentHistoryTable rows={paymentRows} />
         </div>
       )}
 

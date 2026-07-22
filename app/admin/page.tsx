@@ -33,7 +33,10 @@ export default async function AdminDashboard() {
   const now = new Date();
   const currentMonthKey = `${now.getFullYear()}-${now.getMonth()}`;
 
-  const latestPaymentByMember = new Map<string, { amount: number; paid_on: string; valid_until: string }>();
+  const latestPaymentByMember = new Map<
+    string,
+    { id: string; amount: number; paid_on: string; valid_until: string }
+  >();
   const paymentCountByMember = new Map<string, number>();
   const paidThisMonthMembers = new Set<string>();
   for (const p of payments ?? []) {
@@ -46,21 +49,6 @@ export default async function AdminDashboard() {
       paidThisMonthMembers.add(p.member_id);
     }
   }
-
-  const memberInfoById = new Map<string, { name: string; mobile: string }>();
-  for (const m of members ?? []) {
-    memberInfoById.set(m.id, { name: m.name, mobile: m.mobile });
-  }
-
-  const paymentRows = (payments ?? []).map((payment) => ({
-    id: payment.id,
-    memberId: payment.member_id,
-    memberName: memberInfoById.get(payment.member_id)?.name ?? "Unknown member",
-    memberMobile: memberInfoById.get(payment.member_id)?.mobile ?? "",
-    amount: payment.amount,
-    paidOn: payment.paid_on,
-    validUntil: payment.valid_until,
-  }));
 
   const lastSeenByMember = new Map<string, string>();
   for (const a of attendance ?? []) {
@@ -83,6 +71,9 @@ export default async function AdminDashboard() {
       email: m.email,
       joinDate: m.join_date,
       planName: m.plan_name ?? "—",
+      paymentId: latestPayment?.id ?? null,
+      amount: latestPayment?.amount ?? null,
+      paidOn: latestPayment?.paid_on ?? null,
       validUntil: latestPayment?.valid_until ?? null,
       isActiveOverride: m.is_active_override ?? null,
       // Self-signed-up members with zero payments are "pending", not "expired".
@@ -147,7 +138,6 @@ export default async function AdminDashboard() {
         activity={activity}
         pendingMembers={pendingMembers}
         memberRows={memberRows}
-        paymentRows={paymentRows}
         visitorRows={visitorRows}
       />
     </div>

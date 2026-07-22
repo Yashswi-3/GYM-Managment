@@ -11,11 +11,13 @@ export default function AddMemberForm() {
   const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [paymentDone, setPaymentDone] = useState<"yes" | "no">("yes");
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(formData: FormData) {
     setError(null);
     setSuccess(false);
+    formData.set("paymentDone", paymentDone);
     startTransition(async () => {
       const result = await addMemberWithPayment(formData);
       if (!result.ok) {
@@ -23,6 +25,7 @@ export default function AddMemberForm() {
         return;
       }
       setSuccess(true);
+      setPaymentDone("yes");
       formRef.current?.reset();
     });
   }
@@ -37,7 +40,25 @@ export default function AddMemberForm() {
         <Input name="planName" placeholder="Plan (e.g. Monthly)" required />
         <Input name="amount" type="number" step="0.01" placeholder="Amount" required />
         <Input name="validUntil" type="date" required />
-        <div className="md:col-span-6 flex items-center gap-3">
+        <div className="md:col-span-6 flex flex-wrap items-center gap-3">
+          <div className="flex gap-1">
+            <Button
+              type="button"
+              size="sm"
+              variant={paymentDone === "yes" ? "default" : "secondary"}
+              onClick={() => setPaymentDone("yes")}
+            >
+              Payment Done
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={paymentDone === "no" ? "default" : "secondary"}
+              onClick={() => setPaymentDone("no")}
+            >
+              Payment Not Done
+            </Button>
+          </div>
           <Button type="submit" loading={isPending}>
             {isPending ? "Saving..." : "Save"}
           </Button>

@@ -4,6 +4,8 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeMobile } from "@/lib/phone";
+import { notifyMemberAndOwner } from "@/lib/email";
+import { GYM_NAME } from "@/lib/site";
 
 const memberPaymentSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
@@ -14,6 +16,7 @@ const memberPaymentSchema = z.object({
   planName: z.string().trim().min(1, "Plan is required"),
   amount: z.coerce.number().positive("Amount must be positive"),
   validUntil: z.string().min(1, "Valid-until date is required"),
+  paymentDone: z.enum(["yes", "no"]),
 });
 
 /**
@@ -34,6 +37,29 @@ async function convertVisitorForMember(
 }
 
 /**
+ * Admin marked a new member's payment as not done: the plan/amount/due-date
+ * they entered is still saved (handled by the caller) so the table shows
+ * what's owed and by when, but the member is force-flagged Payment Incomplete
+ * rather than left to derive Active from a payment that hasn't happened, and
+ * both the owner and the member (if they gave an email) hear about it now
+ * rather than waiting for the daily reminder job.
+ */
+async function markPaymentIncompleteAndNotify(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  memberId: string,
+  memberName: string,
+  memberEmail: string | null
+) {
+  await supabase.from("members").update({ is_active_override: false }).eq("id", memberId);
+  await notifyMemberAndOwner(
+    memberEmail,
+    memberName,
+    `Welcome to ${GYM_NAME} — payment pending`,
+    `Welcome to ${GYM_NAME}! Your membership starts today. Your payment is still incomplete — please complete your payment for smoother access.`
+  );
+}
+
+/**
  * FR1 + FR3 + FR6 — adds a member (or reuses an existing one by mobile),
  * records a payment against them, and — if a visitor record with the same
  * mobile exists and hasn't converted yet — links it. Conversion is implicit:
@@ -47,13 +73,14 @@ export async function addMemberWithPayment(formData: FormData) {
     planName: formData.get("planName"),
     amount: formData.get("amount"),
     validUntil: formData.get("validUntil"),
+    paymentDone: formData.get("paymentDone"),
   });
 
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message };
   }
 
-  const { name, email, planName, amount, validUntil } = parsed.data;
+  const { name, email, planName, amount, validUntil, paymentDone } = parsed.data;
   const mobile = normalizeMobile(parsed.data.mobile);
   const supabase = await createClient();
 
@@ -89,6 +116,10 @@ export async function addMemberWithPayment(formData: FormData) {
   if (paymentError) return { ok: false, error: paymentError.message };
 
   await convertVisitorForMember(supabase, mobile, memberId);
+
+  if (paymentDone === "no") {
+    await markPaymentIncompleteAndNotify(supabase, memberId, name, email || null);
+  }
 
   revalidatePath("/admin");
   return { ok: true };
@@ -129,6 +160,7 @@ const activateSchema = z.object({
   planName: z.string().trim().min(1, "Plan is required"),
   amount: z.coerce.number().positive("Amount must be positive"),
   validUntil: z.string().min(1, "Valid-until date is required"),
+  paymentDone: z.enum(["yes", "no"]),
 });
 
 /**
@@ -142,17 +174,18 @@ export async function activatePendingMember(formData: FormData) {
     planName: formData.get("planName"),
     amount: formData.get("amount"),
     validUntil: formData.get("validUntil"),
+    paymentDone: formData.get("paymentDone"),
   });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
 
   const supabase = await createClient();
-  const { memberId, planName, amount, validUntil } = parsed.data;
+  const { memberId, planName, amount, validUntil, paymentDone } = parsed.data;
 
   const { data: member, error: memberError } = await supabase
     .from("members")
     .update({ plan_name: planName })
     .eq("id", memberId)
-    .select("mobile")
+    .select("mobile, name, email")
     .single();
   if (memberError) return { ok: false, error: memberError.message };
 
@@ -162,6 +195,10 @@ export async function activatePendingMember(formData: FormData) {
   if (paymentError) return { ok: false, error: paymentError.message };
 
   await convertVisitorForMember(supabase, member.mobile, memberId);
+
+  if (paymentDone === "no") {
+    await markPaymentIncompleteAndNotify(supabase, memberId, member.name, member.email);
+  }
 
   revalidatePath("/admin");
   return { ok: true };
@@ -232,9 +269,20 @@ const updateMemberSchema = z.object({
   mobile: z.string().trim().min(7, "Enter a valid mobile number"),
   email: z.string().trim().email().optional().or(z.literal("")),
   planName: z.string().trim().min(1, "Plan is required"),
+  // Present only when the member already has a payment to edit — a brand
+  // new pending signup won't have one yet, so these stay optional.
+  paymentId: z.string().uuid().optional(),
+  amount: z.coerce.number().positive("Amount must be positive").optional(),
+  paidOn: z.string().min(1).optional(),
+  validUntil: z.string().min(1).optional(),
 });
 
-/** Edit a member's own details (not their payments — that stays via recordPayment). */
+/**
+ * Edit everything about a member from one form: their own details plus
+ * (when they already have a payment on file) that payment's amount/paid-on/
+ * valid-until, so corrections don't require a second, separate table.
+ * Recording a brand-new payment cycle is a different action — see recordPayment.
+ */
 export async function updateMember(formData: FormData) {
   const parsed = updateMemberSchema.safeParse({
     memberId: formData.get("memberId"),
@@ -242,10 +290,14 @@ export async function updateMember(formData: FormData) {
     mobile: formData.get("mobile"),
     email: formData.get("email"),
     planName: formData.get("planName"),
+    paymentId: formData.get("paymentId") || undefined,
+    amount: formData.get("amount") || undefined,
+    paidOn: formData.get("paidOn") || undefined,
+    validUntil: formData.get("validUntil") || undefined,
   });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
 
-  const { memberId, name, planName } = parsed.data;
+  const { memberId, name, planName, paymentId, amount, paidOn, validUntil } = parsed.data;
   const mobile = normalizeMobile(parsed.data.mobile);
   const supabase = await createClient();
 
@@ -260,6 +312,14 @@ export async function updateMember(formData: FormData) {
       return { ok: false, error: "That mobile number already belongs to another member." };
     }
     return { ok: false, error: error.message };
+  }
+
+  if (paymentId && amount !== undefined && paidOn && validUntil) {
+    const { error: paymentError } = await supabase
+      .from("payments")
+      .update({ amount, paid_on: paidOn, valid_until: validUntil })
+      .eq("id", paymentId);
+    if (paymentError) return { ok: false, error: paymentError.message };
   }
 
   revalidatePath("/admin");
@@ -281,30 +341,6 @@ export async function deleteMember(formData: FormData) {
 
   const supabase = await createClient();
   const { error } = await supabase.from("members").delete().eq("id", memberId);
-  if (error) return { ok: false, error: error.message };
-
-  revalidatePath("/admin");
-  return { ok: true };
-}
-
-const updatePaymentDateSchema = z.object({
-  paymentId: z.string().uuid(),
-  newPaidOn: z.string().min(1, "Paid-on date is required"),
-});
-
-/** Update the paid_on date of a payment (for backdating/correcting activation date) */
-export async function updatePaymentDate(formData: FormData) {
-  const parsed = updatePaymentDateSchema.safeParse({
-    paymentId: formData.get("paymentId"),
-    newPaidOn: formData.get("newPaidOn"),
-  });
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
-
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("payments")
-    .update({ paid_on: parsed.data.newPaidOn })
-    .eq("id", parsed.data.paymentId);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/admin");
