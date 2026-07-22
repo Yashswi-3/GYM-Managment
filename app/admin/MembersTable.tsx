@@ -1,25 +1,18 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
+import { useState } from "react";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Alert } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import type { MemberStatus } from "@/lib/status";
-import { setMemberActiveOverride } from "./actions";
+import MemberRowItem from "./MemberRowItem";
 
 export interface MemberRow {
   id: string;
   name: string;
   mobile: string;
+  email?: string | null;
   joinDate: string;
   planName: string;
   validUntil: string | null;
@@ -33,85 +26,11 @@ export interface MemberRow {
 
 export type MemberFilter = "all" | "paid" | "unpaid";
 
-const statusStyles: Record<MemberStatus, string> = {
-  pending: "bg-muted text-muted-foreground",
-  active: "bg-[oklch(0.75_0.12_145_/_0.18)] text-[oklch(0.8_0.15_145)]",
-  expiring_soon: "bg-primary/15 text-primary",
-  expired: "bg-destructive/15 text-destructive",
-  inactive: "bg-muted text-muted-foreground border border-border/60",
-};
-
-const statusLabels: Record<MemberStatus, string> = {
-  pending: "Pending signup",
-  active: "Active",
-  expiring_soon: "Expiring soon",
-  expired: "Expired",
-  inactive: "Inactive",
-};
-
 const filterLabels: Record<MemberFilter, string> = {
   all: "All",
   paid: "Paid this month",
   unpaid: "Unpaid this month",
 };
-
-function MemberOverrideControls({ member }: { member: MemberRow }) {
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  function submit(statusOverride: "active" | "inactive" | "auto") {
-    setError(null);
-    const formData = new FormData();
-    formData.set("memberId", member.id);
-    formData.set("statusOverride", statusOverride);
-
-    startTransition(async () => {
-      const result = await setMemberActiveOverride(formData);
-      if (!result.ok) setError(result.error ?? "Something went wrong");
-    });
-  }
-
-  const current =
-    member.isActiveOverride === true ? "active" : member.isActiveOverride === false ? "inactive" : "auto";
-
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant={current === "auto" ? "default" : "secondary"}
-          onClick={() => submit("auto")}
-          loading={isPending}
-        >
-          Auto
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={current === "active" ? "default" : "secondary"}
-          onClick={() => submit("active")}
-          loading={isPending}
-        >
-          Active
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={current === "inactive" ? "default" : "secondary"}
-          onClick={() => submit("inactive")}
-          loading={isPending}
-        >
-          Inactive
-        </Button>
-      </div>
-      <div className="text-[11px] text-muted-foreground">
-        {current === "auto" ? "Derived from latest payment." : `Forced ${current}.`}
-      </div>
-      {error && <Alert variant="destructive">{error}</Alert>}
-    </div>
-  );
-}
 
 export default function MembersTable({
   rows,
@@ -173,41 +92,18 @@ export default function MembersTable({
             <TableHead>Tenure</TableHead>
             <TableHead>Last seen</TableHead>
             <TableHead>Override</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {filtered.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="text-center text-muted-foreground">
+              <TableCell colSpan={9} className="text-center text-muted-foreground">
                 {rows.length === 0 ? "No members yet." : "No members match this filter."}
               </TableCell>
             </TableRow>
           ) : (
-            filtered.map((m) => (
-              <TableRow key={m.id}>
-                <TableCell>{m.name}</TableCell>
-                <TableCell className="font-mono">{m.mobile}</TableCell>
-                <TableCell>{m.planName}</TableCell>
-                <TableCell>
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusStyles[m.status]}`}>
-                    {statusLabels[m.status]}
-                  </span>
-                </TableCell>
-                <TableCell>{m.validUntil ? new Date(m.validUntil).toLocaleDateString() : "—"}</TableCell>
-                <TableCell>{m.tenureDays}d</TableCell>
-                <TableCell>
-                  {m.lastSeen ? (
-                    new Date(m.lastSeen).toLocaleDateString()
-                  ) : (
-                    <span className="text-destructive">Never</span>
-                  )}
-                  {m.inactive7 && <span className="ml-1 text-xs text-destructive">(inactive)</span>}
-                </TableCell>
-                <TableCell>
-                  <MemberOverrideControls member={m} />
-                </TableCell>
-              </TableRow>
-            ))
+            filtered.map((m) => <MemberRowItem key={m.id} member={m} />)
           )}
         </TableBody>
       </Table>

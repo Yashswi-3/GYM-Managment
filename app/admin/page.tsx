@@ -80,6 +80,7 @@ export default async function AdminDashboard() {
       id: m.id,
       name: m.name,
       mobile: m.mobile,
+      email: m.email,
       joinDate: m.join_date,
       planName: m.plan_name ?? "—",
       validUntil: latestPayment?.valid_until ?? null,

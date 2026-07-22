@@ -212,6 +212,67 @@ export async function setMemberActiveOverride(formData: FormData) {
 
 export const toggleMemberActive = setMemberActiveOverride;
 
+const updateMemberSchema = z.object({
+  memberId: z.string().uuid(),
+  name: z.string().trim().min(1, "Name is required"),
+  mobile: z.string().trim().min(7, "Enter a valid mobile number"),
+  email: z.string().trim().email().optional().or(z.literal("")),
+  planName: z.string().trim().min(1, "Plan is required"),
+});
+
+/** Edit a member's own details (not their payments — that stays via recordPayment). */
+export async function updateMember(formData: FormData) {
+  const parsed = updateMemberSchema.safeParse({
+    memberId: formData.get("memberId"),
+    name: formData.get("name"),
+    mobile: formData.get("mobile"),
+    email: formData.get("email"),
+    planName: formData.get("planName"),
+  });
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+
+  const { memberId, name, planName } = parsed.data;
+  const mobile = normalizeMobile(parsed.data.mobile);
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("members")
+    .update({ name, mobile, email: parsed.data.email || null, plan_name: planName })
+    .eq("id", memberId);
+
+  if (error) {
+    // Postgres unique-violation code — the edited mobile belongs to someone else.
+    if (error.code === "23505") {
+      return { ok: false, error: "That mobile number already belongs to another member." };
+    }
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+/**
+ * Hard delete: removes the member row outright. Cascading deletes already
+ * set up in migration 0001 take their payments, attendance, notification
+ * history, and remembered-device tokens with them — nothing left behind.
+ * Chosen over a soft-delete/archive flag to keep this simple and to avoid
+ * accumulating dead rows indefinitely on the free-tier Supabase plan.
+ */
+export async function deleteMember(formData: FormData) {
+  const memberId = formData.get("memberId");
+  if (typeof memberId !== "string" || !memberId) {
+    return { ok: false, error: "Missing member id" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("members").delete().eq("id", memberId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
 const updatePaymentDateSchema = z.object({
   paymentId: z.string().uuid(),
   newPaidOn: z.string().min(1, "Paid-on date is required"),
