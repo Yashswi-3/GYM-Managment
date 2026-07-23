@@ -88,18 +88,19 @@ export default function MembersTable({
             <TableHead>Name</TableHead>
             <TableHead>Mobile</TableHead>
             <TableHead>Plan</TableHead>
+            <TableHead>Amount</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Valid until</TableHead>
             <TableHead>Tenure</TableHead>
             <TableHead>Last seen</TableHead>
-            <TableHead>Override</TableHead>
+            <TableHead>Payment</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {filtered.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={9} className="text-center text-muted-foreground">
+              <TableCell colSpan={10} className="text-center text-muted-foreground">
                 {rows.length === 0 ? "No members yet." : "No members match this filter."}
               </TableCell>
             </TableRow>

@@ -23,7 +23,7 @@ export default function ActivityFeed({ rows }: { rows: ActivityRow[] }) {
               <CheckCircle2 className="size-4 text-primary shrink-0" />
               <span className="font-medium flex-1">{r.memberName}</span>
               <span className="text-muted-foreground text-xs">
-                {new Date(r.checkedInAt).toLocaleString()}
+                {new Date(r.checkedInAt).toLocaleString("en-IN")}
               </span>
             </li>
           ))}

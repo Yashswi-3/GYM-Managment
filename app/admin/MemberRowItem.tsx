@@ -29,15 +29,22 @@ const statusLabels: Record<MemberStatus, string> = {
   inactive: "Payment Incomplete",
 };
 
-function MemberOverrideControls({ member }: { member: MemberRow }) {
+function MemberOverrideControls({ member, onRenew }: { member: MemberRow; onRenew: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  function submit(statusOverride: "active" | "inactive" | "auto") {
+  // There's no "Auto" button — auto is just what happens when nothing is
+  // forced. Renew (an actual payment) is what naturally returns a member
+  // to Payment Complete; Payment Incomplete is the only manual override,
+  // for flagging a real problem (e.g. a bounced payment) ahead of the
+  // calendar, and it's cleared automatically the next time Renew runs.
+  const forcedIncomplete = member.isActiveOverride === false;
+
+  function forceIncomplete() {
     setError(null);
     const formData = new FormData();
     formData.set("memberId", member.id);
-    formData.set("statusOverride", statusOverride);
+    formData.set("statusOverride", "inactive");
 
     startTransition(async () => {
       const result = await setMemberActiveOverride(formData);
@@ -45,42 +52,26 @@ function MemberOverrideControls({ member }: { member: MemberRow }) {
     });
   }
 
-  const current =
-    member.isActiveOverride === true ? "active" : member.isActiveOverride === false ? "inactive" : "auto";
-
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
+        {member.paymentId && (
+          <Button type="button" size="sm" variant="secondary" onClick={onRenew}>
+            Renew
+          </Button>
+        )}
         <Button
           type="button"
           size="sm"
-          variant={current === "auto" ? "default" : "secondary"}
-          onClick={() => submit("auto")}
-          loading={isPending}
-        >
-          Auto
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={current === "active" ? "default" : "secondary"}
-          onClick={() => submit("active")}
-          loading={isPending}
-        >
-          Payment Complete
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={current === "inactive" ? "default" : "secondary"}
-          onClick={() => submit("inactive")}
+          variant={forcedIncomplete ? "default" : "secondary"}
+          onClick={forceIncomplete}
           loading={isPending}
         >
           Payment Incomplete
         </Button>
       </div>
       <div className="text-[11px] text-muted-foreground">
-        {current === "auto" ? "Derived from latest payment." : "Forced by admin."}
+        {forcedIncomplete ? "Forced incomplete by admin." : "Derived from latest payment."}
       </div>
       {error && <Alert variant="destructive">{error}</Alert>}
     </div>
@@ -154,7 +145,7 @@ export default function MemberRowItem({ member }: { member: MemberRow }) {
   if (editing) {
     return (
       <TableRow>
-        <TableCell colSpan={9} className="py-3">
+        <TableCell colSpan={10} className="py-3">
           <form action={handleUpdate} className="flex flex-wrap items-center gap-2">
             {member.paymentId && <input type="hidden" name="paymentId" value={member.paymentId} />}
             <Input name="name" defaultValue={member.name} placeholder="Name" className="flex-1 min-w-[120px]" required />
@@ -204,7 +195,7 @@ export default function MemberRowItem({ member }: { member: MemberRow }) {
   if (renewing) {
     return (
       <TableRow>
-        <TableCell colSpan={9} className="py-3">
+        <TableCell colSpan={10} className="py-3">
           <RenewForm memberId={member.id} onDone={() => setRenewing(false)} />
         </TableCell>
       </TableRow>
@@ -216,34 +207,30 @@ export default function MemberRowItem({ member }: { member: MemberRow }) {
       <TableCell>{member.name}</TableCell>
       <TableCell className="font-mono">{member.mobile}</TableCell>
       <TableCell>{member.planName}</TableCell>
+      <TableCell>{member.amount != null ? member.amount : "—"}</TableCell>
       <TableCell>
         <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusStyles[member.status]}`}>
           {statusLabels[member.status]}
         </span>
       </TableCell>
-      <TableCell>{member.validUntil ? new Date(member.validUntil).toLocaleDateString() : "—"}</TableCell>
+      <TableCell>{member.validUntil ? new Date(member.validUntil).toLocaleDateString("en-IN") : "—"}</TableCell>
       <TableCell>{member.tenureDays}d</TableCell>
       <TableCell>
         {member.lastSeen ? (
-          new Date(member.lastSeen).toLocaleDateString()
+          new Date(member.lastSeen).toLocaleDateString("en-IN")
         ) : (
           <span className="text-destructive">Never</span>
         )}
         {member.inactive7 && <span className="ml-1 text-xs text-destructive">(inactive)</span>}
       </TableCell>
       <TableCell>
-        <MemberOverrideControls member={member} />
+        <MemberOverrideControls member={member} onRenew={() => setRenewing(true)} />
       </TableCell>
       <TableCell className="text-right whitespace-nowrap">
         <div className="flex justify-end gap-1">
           <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
             Edit
           </Button>
-          {member.paymentId && (
-            <Button size="sm" variant="secondary" onClick={() => setRenewing(true)}>
-              Renew
-            </Button>
-          )}
           {confirmDelete ? (
             <Button size="sm" variant="destructive" loading={isPending} onClick={handleDelete}>
               {isPending ? "Deleting..." : "Confirm?"}

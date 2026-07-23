@@ -210,7 +210,12 @@ const paymentOnlySchema = z.object({
   validUntil: z.string().min(1, "Valid-until date is required"),
 });
 
-/** FR3 — record a renewal payment against an existing member. */
+/**
+ * FR3 — record a renewal payment against an existing member. Also clears
+ * any manual Payment Incomplete override: a fresh payment is the one event
+ * that should always resume automatic (date-based) status tracking, so an
+ * admin never has to remember to flip the override back themselves.
+ */
 export async function recordPayment(formData: FormData) {
   const parsed = paymentOnlySchema.safeParse({
     memberId: formData.get("memberId"),
@@ -227,18 +232,29 @@ export async function recordPayment(formData: FormData) {
   });
   if (error) return { ok: false, error: error.message };
 
+  await supabase
+    .from("members")
+    .update({ is_active_override: null })
+    .eq("id", parsed.data.memberId);
+
   revalidatePath("/admin");
   return { ok: true };
 }
 
 const memberOverrideSchema = z.object({
   memberId: z.string().uuid(),
-  statusOverride: z.enum(["active", "inactive", "auto"]),
+  statusOverride: z.enum(["inactive", "auto"]),
 });
 
 /**
- * Manually forces a member active/inactive, or clears the override back to
- * derived-from-payment status.
+ * Manually flags a member Payment Incomplete regardless of the calendar
+ * (e.g. a bounced payment), or clears the override back to automatic,
+ * date-derived status. There's deliberately no manual "force Complete" —
+ * the only correct way to mark someone as paid is recordPayment, which
+ * records what was actually collected and lets Auto derive Complete from
+ * the real due date. A button that just declares "Complete" with nothing
+ * behind it is exactly the kind of shortcut that gets misused instead of
+ * recording the actual payment.
  */
 export async function setMemberActiveOverride(formData: FormData) {
   const parsed = memberOverrideSchema.safeParse({
@@ -248,10 +264,7 @@ export async function setMemberActiveOverride(formData: FormData) {
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
 
   const supabase = await createClient();
-  const isActiveOverride =
-    parsed.data.statusOverride === "auto"
-      ? null
-      : parsed.data.statusOverride === "active";
+  const isActiveOverride = parsed.data.statusOverride === "auto" ? null : false;
 
   const { error } = await supabase
     .from("members")
