@@ -333,6 +333,12 @@ export async function updateMember(formData: FormData) {
       .update({ amount, paid_on: paidOn, valid_until: validUntil })
       .eq("id", paymentId);
     if (paymentError) return { ok: false, error: paymentError.message };
+
+    // Same reasoning as recordPayment: correcting/confirming a payment here
+    // is evidence the member is paid up, so any manual Payment Incomplete
+    // flag should clear too — otherwise it stays stuck even after the
+    // payment is entered correctly.
+    await supabase.from("members").update({ is_active_override: null }).eq("id", memberId);
   }
 
   revalidatePath("/admin");

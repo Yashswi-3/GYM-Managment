@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { activatePendingMember } from "./actions";
+import { oneMonthFromToday } from "@/lib/status";
 
 export interface PendingMember {
   id: string;
@@ -54,6 +55,7 @@ function ActivateRow({ member }: { member: PendingMember }) {
         <Input
           name="validUntil"
           type="date"
+          defaultValue={oneMonthFromToday()}
           className="flex-1 min-w-[140px] sm:flex-none sm:w-40"
           required
         />

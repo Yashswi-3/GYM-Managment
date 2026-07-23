@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { addMemberWithPayment } from "./actions";
+import { oneMonthFromToday } from "@/lib/status";
 
 export default function AddMemberForm() {
   const formRef = useRef<HTMLFormElement>(null);
@@ -39,7 +40,7 @@ export default function AddMemberForm() {
         <Input name="email" type="email" placeholder="Email (for notifications)" />
         <Input name="planName" placeholder="Plan (e.g. Monthly)" required />
         <Input name="amount" type="number" step="0.01" placeholder="Amount" required />
-        <Input name="validUntil" type="date" required />
+        <Input name="validUntil" type="date" defaultValue={oneMonthFromToday()} required />
         <div className="md:col-span-6 flex flex-wrap items-center gap-3">
           <div className="flex gap-1">
             <Button

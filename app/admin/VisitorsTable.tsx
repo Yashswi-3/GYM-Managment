@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Card } from "@/components/ui/card";
 import {
   Table,
   TableHeader,
@@ -29,6 +30,18 @@ function monthLabel(key: string) {
   return new Date(year, month - 1, 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
 }
 
+function VisitorBadge({ converted }: { converted: boolean }) {
+  return converted ? (
+    <span className="px-2 py-0.5 rounded text-xs font-medium bg-[oklch(0.75_0.12_145_/_0.18)] text-[oklch(0.8_0.15_145)]">
+      Converted
+    </span>
+  ) : (
+    <span className="px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
+      Visitor
+    </span>
+  );
+}
+
 export default function VisitorsTable({ rows }: { rows: VisitorRow[] }) {
   const currentMonth = monthKey(new Date());
   const availableMonths = Array.from(
@@ -54,50 +67,70 @@ export default function VisitorsTable({ rows }: { rows: VisitorRow[] }) {
           ))}
         </select>
       </div>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Mobile</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Remarks</TableHead>
-            <TableHead>Visited</TableHead>
-            <TableHead>Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filtered.length === 0 ? (
+      {/* Desktop: table. Mobile: stacked cards. */}
+      <div className="hidden md:block">
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground">
-                No visitors in {monthLabel(selectedMonth)}.
-              </TableCell>
+              <TableHead>Name</TableHead>
+              <TableHead>Mobile</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Remarks</TableHead>
+              <TableHead>Visited</TableHead>
+              <TableHead>Status</TableHead>
             </TableRow>
-          ) : (
-            filtered.map((v) => (
-              <TableRow key={v.id}>
-                <TableCell>{v.name}</TableCell>
-                <TableCell className="font-mono">{v.mobile}</TableCell>
-                <TableCell>{v.email ?? "—"}</TableCell>
-                <TableCell className="max-w-[280px] whitespace-pre-wrap text-sm text-muted-foreground">
-                  {v.remarks ?? "—"}
-                </TableCell>
-                <TableCell>{new Date(v.visitedOn).toLocaleDateString("en-IN")}</TableCell>
-                <TableCell>
-                  {v.converted ? (
-                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-[oklch(0.75_0.12_145_/_0.18)] text-[oklch(0.8_0.15_145)]">
-                      Converted
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
-                      Visitor
-                    </span>
-                  )}
+          </TableHeader>
+          <TableBody>
+            {filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-muted-foreground">
+                  No visitors in {monthLabel(selectedMonth)}.
                 </TableCell>
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
+            ) : (
+              filtered.map((v) => (
+                <TableRow key={v.id}>
+                  <TableCell>{v.name}</TableCell>
+                  <TableCell className="font-mono">{v.mobile}</TableCell>
+                  <TableCell>{v.email ?? "—"}</TableCell>
+                  <TableCell className="max-w-[280px] whitespace-pre-wrap text-sm text-muted-foreground">
+                    {v.remarks ?? "—"}
+                  </TableCell>
+                  <TableCell>{new Date(v.visitedOn).toLocaleDateString("en-IN")}</TableCell>
+                  <TableCell>
+                    <VisitorBadge converted={v.converted} />
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="md:hidden space-y-3">
+        {filtered.length === 0 ? (
+          <p className="text-center text-sm text-muted-foreground py-6">
+            No visitors in {monthLabel(selectedMonth)}.
+          </p>
+        ) : (
+          filtered.map((v) => (
+            <Card key={v.id} className="p-4 border-border/60 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{v.name}</div>
+                  <div className="text-xs text-muted-foreground font-mono">{v.mobile}</div>
+                </div>
+                <VisitorBadge converted={v.converted} />
+              </div>
+              <div className="text-sm text-muted-foreground">{v.email ?? "No email"}</div>
+              {v.remarks && <div className="text-sm whitespace-pre-wrap">{v.remarks}</div>}
+              <div className="text-xs text-muted-foreground">
+                Visited {new Date(v.visitedOn).toLocaleDateString("en-IN")}
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
     </div>
   );
 }

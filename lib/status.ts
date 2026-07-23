@@ -1,4 +1,4 @@
-import { differenceInCalendarDays } from "date-fns";
+import { differenceInCalendarDays, addMonths, format } from "date-fns";
 
 export type MemberStatus = "pending" | "active" | "expiring_soon" | "expired" | "inactive";
 
@@ -36,4 +36,14 @@ export function daysUntil(dateStr: string, today: Date = new Date()): number {
 
 export function daysSince(dateStr: string, today: Date = new Date()): number {
   return differenceInCalendarDays(today, new Date(dateStr));
+}
+
+/**
+ * Sensible default for a "valid until" date input: exactly one calendar
+ * month out (e.g. 22/7 -> 22/8), formatted for a native <input type="date">.
+ * Pre-fills the field so the admin isn't doing this math by hand — still
+ * editable for plans that aren't exactly one month.
+ */
+export function oneMonthFromToday(today: Date = new Date()): string {
+  return format(addMonths(today, 1), "yyyy-MM-dd");
 }

@@ -82,33 +82,48 @@ export default function MembersTable({
           </Button>
         ))}
       </div>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Mobile</TableHead>
-            <TableHead>Plan</TableHead>
-            <TableHead>Amount</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Valid until</TableHead>
-            <TableHead>Tenure</TableHead>
-            <TableHead>Last seen</TableHead>
-            <TableHead>Payment</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filtered.length === 0 ? (
+      {/* Desktop: full table. Mobile: stacked cards (a wide table would just
+          horizontal-scroll on a phone, hiding name/status/actions). */}
+      <div className="hidden md:block">
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={10} className="text-center text-muted-foreground">
-                {rows.length === 0 ? "No members yet." : "No members match this filter."}
-              </TableCell>
+              <TableHead>Name</TableHead>
+              <TableHead>Mobile</TableHead>
+              <TableHead>Plan</TableHead>
+              <TableHead>Amount</TableHead>
+              <TableHead>Paid on</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Valid until</TableHead>
+              <TableHead>Tenure</TableHead>
+              <TableHead>Last seen</TableHead>
+              <TableHead>Payment</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
-          ) : (
-            filtered.map((m) => <MemberRowItem key={m.id} member={m} />)
-          )}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={11} className="text-center text-muted-foreground">
+                  {rows.length === 0 ? "No members yet." : "No members match this filter."}
+                </TableCell>
+              </TableRow>
+            ) : (
+              filtered.map((m) => <MemberRowItem key={m.id} member={m} layout="row" />)
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="md:hidden space-y-3">
+        {filtered.length === 0 ? (
+          <p className="text-center text-sm text-muted-foreground py-6">
+            {rows.length === 0 ? "No members yet." : "No members match this filter."}
+          </p>
+        ) : (
+          filtered.map((m) => <MemberRowItem key={m.id} member={m} layout="card" />)
+        )}
+      </div>
     </div>
   );
 }
