@@ -1,4 +1,4 @@
-hi## Project
+## Project
 Gym management MVP — a lightweight web app for a single gym: admin panel (members, payments, attendance), QR-code check-in for members and visitors, and automated email notifications for upcoming expiry and inactivity. Building for a demo, not scale.
 
 ## Stack
