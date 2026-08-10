@@ -49,10 +49,15 @@ export async function resolveDeviceToken(): Promise<{ id: string; name: string }
     .maybeSingle();
   if (!deviceRow) return null;
 
+  // Approval gate, same as the mobile lookup in app/checkin/actions.ts. Tokens
+  // are only issued on a successful check-in now, so an unapproved signup
+  // shouldn't hold one — this covers the member whose approval is revoked
+  // while their cookie is still live.
   const { data: member } = await supabase
     .from("members")
     .select("id, name")
     .eq("id", deviceRow.member_id)
+    .not("approved_at", "is", null)
     .maybeSingle();
   if (!member) return null;
 

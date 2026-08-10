@@ -22,10 +22,12 @@ members, payments, attendance, visitors, notification_log — see 0001_init.sql,
 Known gaps fixed beyond the original data model:
 - 0002: members had no email column, but FR10/FR11 need one to email the member directly. Nullable — a member without an email just won't get their own copy.
 - 0003: visitors gained an email column (self-registration collects it), and members.plan_name is now nullable to support "pending" members (see below).
+- 0010: members.approved_at — "pending" used to be inferred from "has zero payment rows", which made an unapproved /join signup structurally identical to a real member at every other call site. A column, not a separate table: a table means moving rows, and a migration that moves rows can lose them.
+- 0011: payments.collected — "Payment Not Done" still writes a payments row on purpose (it records what's owed and by when), so "Paid this month" was counting money that was never taken. Defaults true, so every pre-existing row keeps its original meaning.
 
 ## Three public QR entry points
 - /checkin — daily attendance. Recognized mobile -> attendance row. Unrecognized -> visitor registration (FR5/FR8).
-- /join — new member self-signup (name, mobile, email only). Creates a member row with no plan/payment ("pending" status). The admin's Pending Signups panel (app/admin/PendingSignups.tsx) is where the plan + first payment get added — the admin never types the name/mobile.
+- /join — new member self-signup (name, mobile, email only). Creates a member row with approved_at NULL ("pending"). Until the owner approves it, that row cannot check in and gets no remembered-device cookie. The admin's Pending Signups panel (app/admin/PendingSignups.tsx) is where the plan + first payment get added — the admin never types the name/mobile.
 - /visit — dedicated visitor self-registration, separate poster from check-in. If the mobile already belongs to a member, it just tells them so instead of creating a duplicate visitor row.
 
 ## Design system
@@ -52,7 +54,7 @@ Single gym owner = the only Supabase Auth user. Any authenticated session is tre
 Mobile numbers are normalized (lib/phone.ts's normalizeMobile — digits only, last 10 kept) on every read and write, everywhere a mobile number is matched or stored. This fixes a real bug: exact-string matching meant the same person typing "+91 98765 43210" one day and "9876543210" the next was never recognized as the same member, and fell through to "unrecognized visitor" every time. Migration 0004 is a one-time cleanup of already-stored inconsistent numbers.
 
 ## Remembered-device check-in (lib/deviceToken.ts)
-After a successful /join signup or a successful manual mobile-number check-in, the browser gets an opaque random token in a long-lived (~400 day), httpOnly cookie, mapped server-side to that member_id in the device_tokens table (migration 0005). On every future /checkin page load, attemptDeviceCheckIn() tries this cookie first — if it resolves, attendance is logged immediately with zero taps and zero typing, before the mobile-entry form ever shows. Falls back to the normal form for new phones, cleared cookies, or shared devices. Deliberately not tied to biometrics or any new QR/route — same poster, same three QR codes as before.
+After a successful manual mobile-number check-in, the browser gets an opaque random token in a long-lived (~400 day), httpOnly cookie, mapped server-side to that member_id in the device_tokens table (migration 0005). On every future /checkin page load, attemptDeviceCheckIn() tries this cookie first — if it resolves, attendance is logged immediately with zero taps and zero typing, before the mobile-entry form ever shows. Falls back to the normal form for new phones, cleared cookies, or shared devices. Deliberately not tied to biometrics or any new QR/route — same poster, same three QR codes as before.
 
 ---
 

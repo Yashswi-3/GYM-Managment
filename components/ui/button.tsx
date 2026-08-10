@@ -22,11 +22,16 @@ const buttonVariants = cva(
           "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
       },
+      // Every size clears 44px on touch, then relaxes to the old compact
+      // heights from md up. The owner runs this entirely on a phone and the
+      // row actions were all size="sm" — 32px, well under the accessible
+      // minimum and genuinely hard to hit next to a Delete button. Fixing the
+      // variants fixes every call site at once.
       size: {
-        default: "h-9 px-4 py-2 has-[>svg]:px-3",
-        sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
-        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
-        icon: "size-9",
+        default: "min-h-11 md:min-h-9 px-4 py-2 has-[>svg]:px-3",
+        sm: "min-h-11 md:min-h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
+        lg: "min-h-12 md:min-h-10 rounded-md px-6 has-[>svg]:px-4",
+        icon: "size-11 md:size-9",
       },
     },
     defaultVariants: {

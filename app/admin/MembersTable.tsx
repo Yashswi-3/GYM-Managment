@@ -30,12 +30,13 @@ export interface MemberRow {
   paidThisMonth: boolean;
 }
 
-export type MemberFilter = "all" | "paid" | "unpaid";
+export type MemberFilter = "all" | "paid" | "unpaid" | "expiring";
 
 const filterLabels: Record<MemberFilter, string> = {
-  all: "All",
-  paid: "Paid this month",
-  unpaid: "Unpaid this month",
+  all: "Everyone",
+  paid: "Paid",
+  unpaid: "Not paid",
+  expiring: "Ending soon",
 };
 
 export default function MembersTable({
@@ -52,6 +53,7 @@ export default function MembersTable({
   const filtered = rows.filter((r) => {
     if (filter === "paid" && !r.paidThisMonth) return false;
     if (filter === "unpaid" && r.paidThisMonth) return false;
+    if (filter === "expiring" && r.status !== "expiring_soon") return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return r.name.toLowerCase().includes(q) || r.mobile.includes(q);
@@ -94,9 +96,9 @@ export default function MembersTable({
               <TableHead>Amount</TableHead>
               <TableHead>Paid on</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Valid until</TableHead>
-              <TableHead>Tenure</TableHead>
-              <TableHead>Last seen</TableHead>
+              <TableHead>Ends on</TableHead>
+              <TableHead>Member for</TableHead>
+              <TableHead>Last visit</TableHead>
               <TableHead>Payment</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>

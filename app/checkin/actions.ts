@@ -9,6 +9,24 @@ const mobileSchema = z.string().trim().min(7, "Enter a valid mobile number").max
 const nameSchema = z.string().trim().min(1, "Name is required").max(100);
 
 /**
+ * The single place that answers "is this mobile a member who may check in".
+ * An unapproved /join signup is a row in `members` but not a member yet
+ * (see supabase/migrations/0010_member_approval.sql) — and three call sites
+ * asking that question by hand is precisely why the gate was missed the
+ * first time, so they all route through here instead.
+ */
+async function findApprovedMemberByMobile(mobile: string) {
+  const supabase = await createServiceClient();
+  const { data } = await supabase
+    .from("members")
+    .select("id, name")
+    .eq("mobile", normalizeMobile(mobile))
+    .not("approved_at", "is", null)
+    .maybeSingle();
+  return data;
+}
+
+/**
  * FR8/NFR5 — looks up a mobile number server-side only. Returns just enough
  * to drive the UI (recognized + first name for a friendly greeting) and
  * nothing else about the member, so the public check-in page never has
@@ -18,15 +36,9 @@ export async function lookupMobile(mobileInput: string) {
   const parsed = mobileSchema.safeParse(mobileInput);
   if (!parsed.success) return { recognized: false as const };
 
-  const supabase = await createServiceClient();
-  const { data } = await supabase
-    .from("members")
-    .select("id, name")
-    .eq("mobile", normalizeMobile(parsed.data))
-    .maybeSingle();
-
-  if (!data) return { recognized: false as const };
-  return { recognized: true as const, firstName: data.name.split(" ")[0] };
+  const member = await findApprovedMemberByMobile(parsed.data);
+  if (!member) return { recognized: false as const };
+  return { recognized: true as const, firstName: member.name.split(" ")[0] };
 }
 
 /**
@@ -38,15 +50,10 @@ export async function checkInMember(mobileInput: string) {
   const parsed = mobileSchema.safeParse(mobileInput);
   if (!parsed.success) return { ok: false as const, error: "Invalid mobile number" };
 
-  const supabase = await createServiceClient();
-  const { data: member } = await supabase
-    .from("members")
-    .select("id, name")
-    .eq("mobile", normalizeMobile(parsed.data))
-    .maybeSingle();
-
+  const member = await findApprovedMemberByMobile(parsed.data);
   if (!member) return { ok: false as const, error: "Member not found" };
 
+  const supabase = await createServiceClient();
   const { error } = await supabase.from("attendance").insert({ member_id: member.id });
   if (error) return { ok: false as const, error: error.message };
 
@@ -67,12 +74,11 @@ export async function registerVisitor(nameInput: string, mobileInput: string) {
   const normalizedMobile = normalizeMobile(mobile.data);
   const supabase = await createServiceClient();
 
-  // Guard against a race where the mobile became a member between lookup and submit.
-  const { data: existingMember } = await supabase
-    .from("members")
-    .select("id")
-    .eq("mobile", normalizedMobile)
-    .maybeSingle();
+  // Guard against a race where the mobile became a member between lookup and
+  // submit. Same approval question as lookupMobile, so same helper: an
+  // unapproved signup filling this form is a genuine visitor, not a member
+  // being sent down a check-in path that would only reject them.
+  const existingMember = await findApprovedMemberByMobile(mobile.data);
   if (existingMember) {
     return checkInMember(mobile.data);
   }

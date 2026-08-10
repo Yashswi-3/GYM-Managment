@@ -113,6 +113,21 @@
     font-family: var(--font-display);
     letter-spacing: 0.01em;
   }
+  /* Kills the ~300ms tap delay mobile browsers hold while they wait to see if
+     a tap is a double-tap-to-zoom. Every button in the app felt a beat slow
+     because of it; this is the whole fix. */
+  button, a, [role="button"], select, label {
+    touch-action: manipulation;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Signature element: a barbell divider used sparingly (hero + tab strip),

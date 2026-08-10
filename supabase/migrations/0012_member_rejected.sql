@@ -1,0 +1,11 @@
+-- Clearing a bogus signup used to mean hard-deleting the member row, which is
+-- the one operation on this table that can't be taken back. A mis-scan and a
+-- real member are structurally the same row, so the wrong tap is unrecoverable.
+--
+-- rejected_at drops a signup out of Pending without removing anything. The row,
+-- and whatever history hangs off it, stays exactly where it is. Un-rejecting is
+-- setting this back to null.
+--
+-- Check-in needs no change: rejected rows still have approved_at IS NULL, and
+-- 0010's gate already refuses those.
+alter table members add column if not exists rejected_at timestamptz;

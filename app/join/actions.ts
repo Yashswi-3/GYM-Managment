@@ -4,7 +4,6 @@ import { z } from "zod";
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/server";
 import { normalizeMobile } from "@/lib/phone";
-import { rememberDeviceForMember } from "@/lib/deviceToken";
 
 const joinSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
@@ -14,11 +13,15 @@ const joinSchema = z.object({
 
 /**
  * Self-signup: a member scans the "join" QR, fills name/mobile/email, and
- * lands in the members table with no payment yet. The admin dashboard's
- * Pending Signups panel is what turns this into a real, active member once
- * the owner adds an amount and valid-until date — the admin never has to
- * hand-type the name/mobile themselves. Also remembers this browser so
- * future /checkin visits skip straight to attendance with no form at all.
+ * lands in the members table unapproved, with no payment yet. The admin
+ * dashboard's Pending Signups panel is what turns this into a real, active
+ * member once the owner adds an amount and valid-until date — the admin
+ * never has to hand-type the name/mobile themselves.
+ *
+ * Deliberately does NOT remember the device: a remembered device is a
+ * zero-tap check-in, and handing that to someone the owner hasn't approved
+ * yet is the whole hole this closes. The cookie is issued on their first
+ * successful check-in after approval instead (app/checkin/actions.ts).
  *
  * Bound directly to the <form action={...}> (see app/join/page.tsx) rather
  * than called from a client onSubmit handler. That's what makes this a
@@ -49,19 +52,13 @@ export async function joinAsMember(formData: FormData) {
     .maybeSingle();
 
   if (existing) {
-    await rememberDeviceForMember(existing.id);
     redirect(`/join?done=1&already=1&name=${encodeURIComponent(name)}`);
   }
 
-  const { data: created, error } = await supabase
-    .from("members")
-    .insert({ name, mobile, email })
-    .select("id")
-    .single();
-  if (error || !created) {
-    redirect(`/join?error=${encodeURIComponent(error?.message ?? "Could not sign up")}`);
+  const { error } = await supabase.from("members").insert({ name, mobile, email });
+  if (error) {
+    redirect(`/join?error=${encodeURIComponent(error.message)}`);
   }
 
-  await rememberDeviceForMember(created.id);
   redirect(`/join?done=1&already=0&name=${encodeURIComponent(name)}`);
 }

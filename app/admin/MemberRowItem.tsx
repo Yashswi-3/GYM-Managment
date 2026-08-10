@@ -6,30 +6,40 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
-import { setMemberActiveOverride, updateMember, deleteMember, recordPayment } from "./actions";
+import {
+  setMemberActiveOverride,
+  updateMember,
+  deleteMember,
+  recordPayment,
+  setMemberRejected,
+} from "./actions";
 import type { MemberRow } from "./MembersTable";
-import { oneMonthFromToday, type MemberStatus } from "@/lib/status";
+import { type MemberStatus } from "@/lib/status";
+import PlanDuration from "./PlanDuration";
 
 type Layout = "row" | "card";
 
 const statusStyles: Record<MemberStatus, string> = {
   pending: "bg-muted text-muted-foreground",
+  rejected: "bg-muted text-muted-foreground line-through",
   active: "bg-[oklch(0.75_0.12_145_/_0.18)] text-[oklch(0.8_0.15_145)]",
-  expiring_soon: "bg-primary/15 text-primary",
+  expiring_soon: "bg-[oklch(0.8_0.16_85_/_0.18)] text-[oklch(0.85_0.16_85)]",
   expired: "bg-destructive/15 text-destructive",
   inactive: "bg-muted text-muted-foreground border border-border/60",
 };
 
-// Payment-workflow wording: Active reads as "Payment Complete"; anything
-// that isn't currently paid up (due soon, overdue, or force-marked
-// incomplete) all read the same "Payment Incomplete" so the table answers
-// one question at a glance — has this person paid or not.
+// Plain words, not system words. The owner has no technical background and
+// reads this on a phone: "Payment Incomplete" is a state name, "Not paid" is
+// a fact about a person. Note this splits what used to be one bucket —
+// "Ends soon" was previously folded into "Payment Incomplete", but it needs a
+// different action from the owner (remind, not chase) so it gets its own word.
 const statusLabels: Record<MemberStatus, string> = {
-  pending: "Pending signup",
-  active: "Payment Complete",
-  expiring_soon: "Payment Incomplete",
-  expired: "Payment Incomplete",
-  inactive: "Payment Incomplete",
+  pending: "Waiting for your OK",
+  rejected: "Rejected",
+  active: "Paid",
+  expiring_soon: "Ends soon",
+  expired: "Not paid",
+  inactive: "Not paid",
 };
 
 function fmtDate(value: string | null): string {
@@ -72,7 +82,7 @@ function MemberOverrideControls({ member, onRenew }: { member: MemberRow; onRene
       <div className="flex flex-wrap gap-2">
         {member.paymentId && (
           <Button type="button" size="sm" variant="secondary" onClick={onRenew}>
-            Renew
+            Take payment
           </Button>
         )}
         <Button
@@ -82,11 +92,11 @@ function MemberOverrideControls({ member, onRenew }: { member: MemberRow; onRene
           onClick={forceIncomplete}
           loading={isPending}
         >
-          Payment Incomplete
+          Mark not paid
         </Button>
       </div>
       <div className="text-[11px] text-muted-foreground">
-        {forcedIncomplete ? "Forced incomplete by admin." : "Derived from latest payment."}
+        {forcedIncomplete ? "You marked this one not paid." : "Based on their last payment."}
       </div>
       {error && <Alert variant="destructive">{error}</Alert>}
     </div>
@@ -121,13 +131,7 @@ function RenewForm({ memberId, layout, onDone }: { memberId: string; layout: Lay
         className={stack ? "w-full" : "w-28"}
         required
       />
-      <Input
-        name="validUntil"
-        type="date"
-        defaultValue={oneMonthFromToday()}
-        className={stack ? "w-full" : "w-40"}
-        required
-      />
+      <PlanDuration stack={stack} />
       <div className="flex gap-2">
         <Button type="submit" size="sm" loading={isPending}>
           {isPending ? "Saving..." : "Save"}
@@ -250,6 +254,18 @@ export default function MemberRowItem({
     });
   }
 
+  // Undo for Reject. Nothing was destroyed, so this is just clearing the flag.
+  function handleRestore() {
+    setError(null);
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set("memberId", member.id);
+      fd.set("rejected", "no");
+      const result = await setMemberRejected(fd);
+      if (!result.ok) setError(result.error ?? "Could not restore");
+    });
+  }
+
   // --- Edit + Renew are shared between layouts; only the wrapper differs. ---
   if (editing) {
     const form = (
@@ -280,7 +296,7 @@ export default function MemberRowItem({
     const form = <RenewForm memberId={member.id} layout={layout} onDone={() => setRenewing(false)} />;
     return layout === "card" ? (
       <Card className="p-4 border-border/60 space-y-2">
-        <div className="text-sm font-medium">Renew — {member.name}</div>
+        <div className="text-sm font-medium">Take payment — {member.name}</div>
         {form}
       </Card>
     ) : (
@@ -317,9 +333,9 @@ export default function MemberRowItem({
           <Fact label="Plan" value={member.planName} />
           <Fact label="Amount" value={member.amount != null ? member.amount : "—"} />
           <Fact label="Paid on" value={fmtDate(member.paidOn)} />
-          <Fact label="Valid until" value={fmtDate(member.validUntil)} />
-          <Fact label="Last seen" value={lastSeenValue} />
-          <Fact label="Tenure" value={`${member.tenureDays}d`} />
+          <Fact label="Ends on" value={fmtDate(member.validUntil)} />
+          <Fact label="Last visit" value={lastSeenValue} />
+          <Fact label="Member for" value={`${member.tenureDays} days`} />
         </div>
 
         <MemberOverrideControls member={member} onRenew={() => setRenewing(true)} />
@@ -328,6 +344,17 @@ export default function MemberRowItem({
           <Button size="sm" variant="secondary" className="flex-1" onClick={() => setEditing(true)}>
             Edit
           </Button>
+          {member.status === "rejected" && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="flex-1"
+              loading={isPending}
+              onClick={handleRestore}
+            >
+              Restore
+            </Button>
+          )}
           {confirmDelete ? (
             <Button
               size="sm"
@@ -380,6 +407,11 @@ export default function MemberRowItem({
           <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
             Edit
           </Button>
+          {member.status === "rejected" && (
+            <Button size="sm" variant="secondary" loading={isPending} onClick={handleRestore}>
+              Restore
+            </Button>
+          )}
           {confirmDelete ? (
             <Button size="sm" variant="destructive" loading={isPending} onClick={handleDelete}>
               {isPending ? "Deleting..." : "Confirm?"}

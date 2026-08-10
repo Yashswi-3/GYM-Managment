@@ -26,13 +26,13 @@ export default function StatsCards({
     tone?: "warn";
     filter?: MemberFilter;
   }[] = [
-    { label: "Total members", value: totalMembers, icon: Users, filter: "all" },
+    { label: "Members", value: totalMembers, icon: Users, filter: "all" },
     { label: "Paid this month", value: paidCount, icon: CreditCard, filter: "paid" },
-    { label: "Unpaid this month", value: unpaidCount, icon: UserX, tone: "warn", filter: "unpaid" },
-    { label: "Visitors (all time)", value: visitorCount, icon: Sparkles },
+    { label: "Not paid", value: unpaidCount, icon: UserX, tone: "warn", filter: "unpaid" },
+    { label: "Visitors, all time", value: visitorCount, icon: Sparkles },
     {
-      label: "Visitor → member conversion",
-      value: visitorCount ? `${convertedCount}/${visitorCount}` : "0/0",
+      label: "Visitors who joined",
+      value: visitorCount ? `${convertedCount} of ${visitorCount}` : "0 of 0",
       icon: Repeat,
     },
   ];

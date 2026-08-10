@@ -51,12 +51,20 @@ async function markPaymentIncompleteAndNotify(
   memberEmail: string | null
 ) {
   await supabase.from("members").update({ is_active_override: false }).eq("id", memberId);
-  await notifyMemberAndOwner(
-    memberEmail,
-    memberName,
-    `Welcome to ${GYM_NAME} — payment pending`,
-    `Welcome to ${GYM_NAME}! Your membership starts today. Your payment is still incomplete — please complete your payment for smoother access.`
-  );
+  try {
+    await notifyMemberAndOwner(
+      memberEmail,
+      memberName,
+      `Welcome to ${GYM_NAME} — payment pending`,
+      `Welcome to ${GYM_NAME}! Your membership starts today. Your payment is still incomplete — please complete your payment for smoother access.`
+    );
+  } catch {
+    // The email is a courtesy; the payment row and the status flag are the
+    // part that matters and both are already written. Letting a Resend outage
+    // throw here reported a *failed* activation that had in fact succeeded —
+    // and the owner's natural response, hitting Activate again, would insert
+    // a second payment row for the same member.
+  }
 }
 
 /**
@@ -87,19 +95,33 @@ export async function addMemberWithPayment(formData: FormData) {
   let memberId: string;
   const { data: existing } = await supabase
     .from("members")
-    .select("id")
+    .select("id, approved_at")
     .eq("mobile", mobile)
     .maybeSingle();
 
   if (existing) {
     memberId = existing.id;
-    if (email) {
-      await supabase.from("members").update({ email }).eq("id", memberId);
+    // The mobile may belong to an unapproved self-signup. The owner typing a
+    // payment for them by hand is the same decision Activate makes, so it
+    // approves them here too — otherwise they'd stay stuck in Pending with a
+    // payment on file. Already-approved rows keep their original timestamp.
+    const patch: { email?: string; approved_at?: string } = {};
+    if (email) patch.email = email;
+    if (!existing.approved_at) patch.approved_at = new Date().toISOString();
+    if (Object.keys(patch).length > 0) {
+      await supabase.from("members").update(patch).eq("id", memberId);
     }
   } else {
     const { data: created, error: insertError } = await supabase
       .from("members")
-      .insert({ name, mobile, email: email || null, plan_name: planName })
+      .insert({
+        name,
+        mobile,
+        email: email || null,
+        plan_name: planName,
+        // Added by the owner directly — approved by construction.
+        approved_at: new Date().toISOString(),
+      })
       .select("id")
       .single();
     if (insertError || !created) {
@@ -112,6 +134,7 @@ export async function addMemberWithPayment(formData: FormData) {
     member_id: memberId,
     amount,
     valid_until: validUntil,
+    collected: paymentDone === "yes",
   });
   if (paymentError) return { ok: false, error: paymentError.message };
 
@@ -160,13 +183,18 @@ const activateSchema = z.object({
   planName: z.string().trim().min(1, "Plan is required"),
   amount: z.coerce.number().positive("Amount must be positive"),
   validUntil: z.string().min(1, "Valid-until date is required"),
-  paymentDone: z.enum(["yes", "no"]),
+  // Approve/Reject is the whole decision in Pending now — approving means the
+  // money came in. Defaulted rather than removed so the field stays available
+  // to any other caller, and so an old cached form post still parses.
+  paymentDone: z.enum(["yes", "no"]).default("yes"),
 });
 
 /**
  * Turns a self-signed-up ("pending") member into an active one: sets their
  * plan and records the first payment. This is the whole point of the /join
  * QR — the admin never types the name/mobile, just the plan + amount + date.
+ * Stamping approved_at here is also the single thing that lets them through
+ * /checkin — until the owner does this, a signup can't log attendance.
  */
 export async function activatePendingMember(formData: FormData) {
   const parsed = activateSchema.safeParse({
@@ -174,7 +202,7 @@ export async function activatePendingMember(formData: FormData) {
     planName: formData.get("planName"),
     amount: formData.get("amount"),
     validUntil: formData.get("validUntil"),
-    paymentDone: formData.get("paymentDone"),
+    paymentDone: formData.get("paymentDone") ?? undefined,
   });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
 
@@ -183,7 +211,7 @@ export async function activatePendingMember(formData: FormData) {
 
   const { data: member, error: memberError } = await supabase
     .from("members")
-    .update({ plan_name: planName })
+    .update({ plan_name: planName, approved_at: new Date().toISOString() })
     .eq("id", memberId)
     .select("mobile, name, email")
     .single();
@@ -191,7 +219,7 @@ export async function activatePendingMember(formData: FormData) {
 
   const { error: paymentError } = await supabase
     .from("payments")
-    .insert({ member_id: memberId, amount, valid_until: validUntil });
+    .insert({ member_id: memberId, amount, valid_until: validUntil, collected: paymentDone === "yes" });
   if (paymentError) return { ok: false, error: paymentError.message };
 
   await convertVisitorForMember(supabase, member.mobile, memberId);
@@ -276,6 +304,43 @@ export async function setMemberActiveOverride(formData: FormData) {
   return { ok: true };
 }
 
+const memberRejectSchema = z.object({
+  memberId: z.string().uuid(),
+  rejected: z.enum(["yes", "no"]),
+});
+
+/**
+ * Clears a bogus signup out of Pending without deleting anything. A mis-scan
+ * and a real member are the same shape of row, and a wrong tap on Delete can't
+ * be undone — so Reject only sets a timestamp. The row stays, and Restore is
+ * the same action with rejected="no".
+ *
+ * Rejecting is scoped to unapproved rows: an approved member is a member, and
+ * the way to flag one is Payment Incomplete, not this.
+ */
+export async function setMemberRejected(formData: FormData) {
+  const parsed = memberRejectSchema.safeParse({
+    memberId: formData.get("memberId"),
+    rejected: formData.get("rejected"),
+  });
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const { memberId, rejected } = parsed.data;
+
+  let query = supabase
+    .from("members")
+    .update({ rejected_at: rejected === "yes" ? new Date().toISOString() : null })
+    .eq("id", memberId);
+  if (rejected === "yes") query = query.is("approved_at", null);
+
+  const { error } = await query;
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
 const updateMemberSchema = z.object({
   memberId: z.string().uuid(),
   name: z.string().trim().min(1, "Name is required"),
@@ -330,14 +395,16 @@ export async function updateMember(formData: FormData) {
   if (paymentId && amount !== undefined && paidOn && validUntil) {
     const { error: paymentError } = await supabase
       .from("payments")
-      .update({ amount, paid_on: paidOn, valid_until: validUntil })
+      .update({ amount, paid_on: paidOn, valid_until: validUntil, collected: true })
       .eq("id", paymentId);
     if (paymentError) return { ok: false, error: paymentError.message };
 
     // Same reasoning as recordPayment: correcting/confirming a payment here
     // is evidence the member is paid up, so any manual Payment Incomplete
     // flag should clear too — otherwise it stays stuck even after the
-    // payment is entered correctly.
+    // payment is entered correctly. `collected` moves with the override for
+    // the same reason: leaving it false would show the member Active while
+    // still excluding them from "Paid this month".
     await supabase.from("members").update({ is_active_override: null }).eq("id", memberId);
   }
 

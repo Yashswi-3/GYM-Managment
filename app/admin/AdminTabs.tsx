@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Users, Sparkles, Plus, X } from "lucide-react";
+import { LayoutDashboard, Users, Sparkles, Plus, X, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import StatsCards from "./StatsCards";
+import NeedsYou from "./NeedsYou";
 import QRCard from "./QRCard";
 import ActivityFeed, { type ActivityRow } from "./ActivityFeed";
 import PendingSignups, { type PendingMember } from "./PendingSignups";
@@ -23,6 +24,8 @@ export default function AdminTabs({
   convertedCount,
   activity,
   pendingMembers,
+  defaultAmount,
+  expiringCount,
   memberRows,
   visitorRows,
 }: {
@@ -33,11 +36,14 @@ export default function AdminTabs({
   convertedCount: number;
   activity: ActivityRow[];
   pendingMembers: PendingMember[];
+  defaultAmount: number | null;
+  expiringCount: number;
   memberRows: MemberRow[];
   visitorRows: VisitorRow[];
 }) {
   const [tab, setTab] = useState<Tab>("overview");
   const [memberFilter, setMemberFilter] = useState<MemberFilter>("all");
+  const [showQR, setShowQR] = useState(false);
   // The add-member / add-visitor forms stay collapsed behind the "+" button
   // so each tab opens straight to the list — the thing you actually read.
   const [showAddForm, setShowAddForm] = useState(false);
@@ -103,6 +109,13 @@ export default function AdminTabs({
 
       {tab === "overview" && (
         <div className="space-y-6">
+          <NeedsYou
+            pendingCount={pendingMembers.length}
+            unpaidCount={unpaidCount}
+            expiringCount={expiringCount}
+            onGoToPending={() => switchTab("members")}
+            onFilterSelect={goToMembersFiltered}
+          />
           <StatsCards
             totalMembers={totalMembers}
             paidCount={paidCount}
@@ -111,18 +124,34 @@ export default function AdminTabs({
             convertedCount={convertedCount}
             onFilterSelect={goToMembersFiltered}
           />
-          <div className="flex flex-wrap gap-3">
-            <QRCard path="/checkin" label="Daily check-in" filename="gym-checkin-qr.png" badge="C" />
-            <QRCard path="/join" label="New member signup" filename="gym-join-qr.png" badge="M" />
-            <QRCard path="/visit" label="Visitor self-registration" filename="gym-visit-qr.png" badge="V" />
-          </div>
           <ActivityFeed rows={activity} />
+
+          {/* The QR posters are a print-once job, not a daily one. They used to
+              sit above the activity feed and take the whole screen on a phone. */}
+          <div>
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={() => setShowQR((open) => !open)}
+              aria-expanded={showQR}
+            >
+              <QrCode className="size-4" />
+              {showQR ? "Hide QR posters" : "Show QR posters"}
+            </Button>
+            {showQR && (
+              <div className="flex flex-wrap gap-3 mt-3">
+                <QRCard path="/checkin" label="Daily check-in" filename="gym-checkin-qr.png" badge="C" />
+                <QRCard path="/join" label="New member signup" filename="gym-join-qr.png" badge="M" />
+                <QRCard path="/visit" label="Visitor self-registration" filename="gym-visit-qr.png" badge="V" />
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {tab === "members" && (
         <div className="space-y-6">
-          <PendingSignups members={pendingMembers} />
+          <PendingSignups members={pendingMembers} defaultAmount={defaultAmount} />
           {showAddForm && <AddMemberForm />}
           <MembersTable rows={memberRows} filter={memberFilter} onFilterChange={setMemberFilter} />
         </div>
