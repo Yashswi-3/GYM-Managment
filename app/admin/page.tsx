@@ -4,6 +4,7 @@ import type { MemberRow } from "./MembersTable";
 import type { PendingMember } from "./PendingSignups";
 import type { VisitorRow } from "./VisitorsTable";
 import type { ActivityRow } from "./ActivityFeed";
+import type { PaymentRow } from "./MoneyTab";
 import AdminTabs from "./AdminTabs";
 
 // ASSUMPTION (flagged as an open question in 01_PRD.md): "paid this month"
@@ -142,6 +143,19 @@ export default async function AdminDashboard() {
     checkedInAt: a.checked_in_at,
   }));
 
+  // Every payment, for the Fees tab. Built after memberRows so memberNameById
+  // is populated — a payment whose member row was deleted would otherwise be
+  // a blank line in the ledger rather than an obvious one.
+  const paymentRows: PaymentRow[] = (payments ?? []).map((p) => ({
+    id: p.id,
+    memberId: p.member_id,
+    memberName: memberNameById.get(p.member_id) ?? "Deleted member",
+    amount: p.amount,
+    paidOn: p.paid_on,
+    validUntil: p.valid_until,
+    collected: p.collected,
+  }));
+
   const totalMembers = memberRows.length;
   const paidCount = memberRows.filter((member) => member.paidThisMonth).length;
   const unpaidCount = totalMembers - paidCount;
@@ -161,6 +175,7 @@ export default async function AdminDashboard() {
         expiringCount={expiringCount}
         memberRows={memberRows}
         visitorRows={visitorRows}
+        paymentRows={paymentRows}
       />
     </div>
   );

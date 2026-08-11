@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Users, Sparkles, Plus, X, QrCode } from "lucide-react";
+import { LayoutDashboard, Users, Sparkles, Plus, X, QrCode, IndianRupee } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import StatsCards from "./StatsCards";
 import NeedsYou from "./NeedsYou";
@@ -13,8 +13,9 @@ import AddMemberForm from "./AddMemberForm";
 import MembersTable, { type MemberRow, type MemberFilter } from "./MembersTable";
 import AddVisitorForm from "./AddVisitorForm";
 import VisitorsTable, { type VisitorRow } from "./VisitorsTable";
+import MoneyTab, { MoneyCard, type PaymentRow } from "./MoneyTab";
 
-type Tab = "overview" | "members" | "visitors";
+type Tab = "overview" | "members" | "money" | "visitors";
 
 export default function AdminTabs({
   totalMembers,
@@ -28,6 +29,7 @@ export default function AdminTabs({
   expiringCount,
   memberRows,
   visitorRows,
+  paymentRows,
 }: {
   totalMembers: number;
   paidCount: number;
@@ -40,6 +42,7 @@ export default function AdminTabs({
   expiringCount: number;
   memberRows: MemberRow[];
   visitorRows: VisitorRow[];
+  paymentRows: PaymentRow[];
 }) {
   const [tab, setTab] = useState<Tab>("overview");
   const [memberFilter, setMemberFilter] = useState<MemberFilter>("all");
@@ -58,11 +61,16 @@ export default function AdminTabs({
     switchTab("members");
   }
 
+  // Only two tabs have something to add. Fees records payments against a
+  // member who already exists — that is the Fees button on their row, not a
+  // form up here, so the "+" would have opened Add visitor on the wrong tab.
+  const canAdd = tab === "members" || tab === "visitors";
   const addLabel = tab === "members" ? "Add member" : "Add visitor";
 
   const tabs = [
     { id: "overview" as const, label: "Overview", short: "Overview", icon: LayoutDashboard },
     { id: "members" as const, label: "Members", short: "Members", icon: Users },
+    { id: "money" as const, label: "Fees", short: "Fees", icon: IndianRupee },
     {
       id: "visitors" as const,
       label: visitorCount ? `Visitors (${visitorCount})` : "Visitors",
@@ -75,7 +83,7 @@ export default function AdminTabs({
     <div className="space-y-6 pb-24 md:pb-0">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Dashboard</h1>
-        {tab !== "overview" && (
+        {canAdd && (
           <Button
             size="sm"
             variant={showAddForm ? "secondary" : "default"}
@@ -116,6 +124,7 @@ export default function AdminTabs({
             onGoToPending={() => switchTab("members")}
             onFilterSelect={goToMembersFiltered}
           />
+          <MoneyCard payments={paymentRows} onOpen={() => switchTab("money")} />
           <StatsCards
             totalMembers={totalMembers}
             paidCount={paidCount}
@@ -157,6 +166,8 @@ export default function AdminTabs({
         </div>
       )}
 
+      {tab === "money" && <MoneyTab payments={paymentRows} />}
+
       {tab === "visitors" && (
         <div className="space-y-6">
           {showAddForm && <AddVisitorForm />}
@@ -166,7 +177,7 @@ export default function AdminTabs({
 
       {/* Mobile: app-style fixed bottom navigation. */}
       <nav className="md:hidden fixed inset-x-0 bottom-0 z-20 border-t border-border/60 bg-background/95 backdrop-blur">
-        <div className="grid grid-cols-3">
+        <div className="grid grid-cols-4">
           {tabs.map((t) => (
             <button
               key={t.id}

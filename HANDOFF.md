@@ -153,6 +153,36 @@ flow — it just won't send.
   confirmed to fail when the function is mutated to return `error.message`,
   so it is not a test that cannot fail.
 
+## The Fees dashboard — done 2026-08-11
+
+A fourth tab (`MoneyTab.tsx`), plus a `MoneyCard` on Overview that taps
+through to it. Totals, last-6-months bars, and a searchable payment list.
+
+**The one rule to not break: every total counts only `collected = true`.**
+A payment row with `collected=false` records what is *owed* — an activation
+entered as "Payment Not Done" writes one. Summing all rows is exactly the bug
+Phase 1 fixed, in the optimistic direction. Money owed is shown in its own
+banner and is never added to anything.
+
+Months come from **slicing the ISO string**, not `new Date(...).getMonth()` —
+`paid_on` is date-only, so parsing gives UTC midnight, which is the previous
+month for anyone west of Greenwich. `lib/money.ts` holds that and is tested
+(`npm test`), including the year-boundary walk in `recentMonthKeys`.
+
+**What the schema cannot answer, and so the dashboard does not pretend to:**
+
+- **How a payment was made** — cash / UPI / card is not a column. Yashswi was
+  asked and chose not to add one, so the page says so in a footnote rather
+  than showing a blank field.
+- **Refunds, discounts, partial payments** — no concept of a balance.
+- **When a payment was entered.** There is no `created_at` on `payments`, and
+  `paid_on` defaults to today and is editable, so a backdated correction
+  silently moves money between months. This is the weakest point in the
+  ledger; a `created_at` would fix it and is additive.
+
+The bars are a div with a width percentage. Six bars do not need a chart
+library, and adding one would be more code than the bars.
+
 ## The members table — two buttons, done 2026-08-11
 
 Every row carried **Take payment, Mark not paid, Edit, Delete**, plus the
