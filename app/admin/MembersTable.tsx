@@ -99,14 +99,16 @@ export default function MembersTable({
               <TableHead>Ends on</TableHead>
               <TableHead>Member for</TableHead>
               <TableHead>Last visit</TableHead>
-              <TableHead>Payment</TableHead>
+              {/* The Payment column is gone — it held two buttons and a
+                  caption that said the same thing on every row. Money now
+                  lives behind Fees, where the amount and dates are. */}
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center text-muted-foreground">
+                <TableCell colSpan={10} className="text-center text-muted-foreground">
                   {rows.length === 0 ? "No members yet." : "No members match this filter."}
                 </TableCell>
               </TableRow>

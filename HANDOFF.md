@@ -153,6 +153,43 @@ flow — it just won't send.
   confirmed to fail when the function is mutated to return `error.message`,
   so it is not a test that cannot fail.
 
+## The members table — two buttons, done 2026-08-11
+
+Every row carried **Take payment, Mark not paid, Edit, Delete**, plus the
+caption "Based on their last payment." repeated on all of them. That is not
+four decisions. The owner is either handling money or correcting a record —
+the buttons were grouped by what the server actions can do, not by what he
+came here to do.
+
+Now **Fees** and **Edit**:
+
+- **Fees** owns money. Take a payment (amount + term), and "Mark as not paid"
+  moved in here, because it is a statement about payment.
+- **Edit** owns the record. All the fields, and **Delete at the bottom behind
+  a divider** — it is the one irreversible thing here and it was sitting in
+  red on all thirty rows. The confirm now names the person and says the
+  payment history goes too.
+
+Three things this fixed rather than just moved:
+
+- **"Mark not paid" was rendered on members who had never paid anything.**
+  Only "Take payment" was gated on `paymentId`. Pending and rejected rows now
+  get no Fees button at all — `recordPayment` does not set `approved_at`, so
+  taking money there would leave the member still unable to check in.
+  Approving is the "Waiting for your OK" panel's job.
+- **"Mark not paid" had no undo.** `setMemberActiveOverride` has always
+  accepted `"auto"`, but nothing ever sent it, so a mis-tap could only be
+  cleared by recording a payment that never happened. Fees now offers
+  "Undo — they have paid".
+- **Every mobile card carried 36px of dead space between blocks.** `Card` is
+  `flex flex-col gap-6`; a `space-y-3` on it does not replace that gap, it
+  adds to it. Cards went 316px → 268px, and a member with no payment on file
+  (four facts reading "—") went to 179px.
+
+The Payment column is gone, so the table is 10 columns and `colSpan` is 10 —
+if you add a column, both `MembersTable` headers and the two `colSpan={10}`
+in `MemberRowItem` have to move together.
+
 ## Public pages — done 2026-08-11
 
 `/join`, `/visit`, `/checkin`. The layout was already right (single column,

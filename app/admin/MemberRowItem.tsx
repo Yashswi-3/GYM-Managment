@@ -19,6 +19,19 @@ import PlanDuration from "./PlanDuration";
 
 type Layout = "row" | "card";
 
+/**
+ * Every row used to carry four buttons and a caption — Take payment, Mark not
+ * paid, Edit, Delete, plus "Based on their last payment." repeated on all of
+ * them. That is not four decisions, it is two: the owner is either handling
+ * money or correcting a record. The buttons were grouped by what the server
+ * actions can do rather than by what the owner came here to do.
+ *
+ * So: two buttons. Fees owns everything about money (take a payment, or flag
+ * one that bounced). Edit owns everything about the record (the fields, and
+ * Delete, which is destructive and belongs behind a deliberate step rather
+ * than sitting in red on all thirty rows at once).
+ */
+
 const statusStyles: Record<MemberStatus, string> = {
   pending: "bg-muted text-muted-foreground",
   rejected: "bg-muted text-muted-foreground line-through",
@@ -46,71 +59,45 @@ function fmtDate(value: string | null): string {
   return value ? new Date(value).toLocaleDateString("en-IN") : "—";
 }
 
-function StatusBadge({ status }: { status: MemberStatus }) {
+function StatusBadge({ member }: { member: MemberRow }) {
   return (
-    <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusStyles[status]}`}>
-      {statusLabels[status]}
+    <span className="inline-flex flex-wrap items-center gap-1">
+      <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusStyles[member.status]}`}>
+        {statusLabels[member.status]}
+      </span>
+      {/* Only when the owner actually forced it. The old caption said "Based
+          on their last payment." under every single row, which is the default
+          and therefore tells you nothing — thirty copies of a sentence that
+          only matters in the other case. */}
+      {member.isActiveOverride === false && (
+        <span className="text-[11px] text-muted-foreground">set by you</span>
+      )}
     </span>
   );
 }
 
-function MemberOverrideControls({ member, onRenew }: { member: MemberRow; onRenew: () => void }) {
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  // There's no "Auto" button — auto is just what happens when nothing is
-  // forced. Renew (an actual payment) is what naturally returns a member
-  // to Payment Complete; Payment Incomplete is the only manual override,
-  // for flagging a real problem (e.g. a bounced payment) ahead of the
-  // calendar, and it's cleared automatically the next time Renew runs.
-  const forcedIncomplete = member.isActiveOverride === false;
-
-  function forceIncomplete() {
-    setError(null);
-    const formData = new FormData();
-    formData.set("memberId", member.id);
-    formData.set("statusOverride", "inactive");
-
-    startTransition(async () => {
-      const result = await setMemberActiveOverride(formData);
-      if (!result.ok) setError(result.error ?? "Something went wrong");
-    });
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
-        {member.paymentId && (
-          <Button type="button" size="sm" variant="secondary" onClick={onRenew}>
-            Take payment
-          </Button>
-        )}
-        <Button
-          type="button"
-          size="sm"
-          variant={forcedIncomplete ? "default" : "secondary"}
-          onClick={forceIncomplete}
-          loading={isPending}
-        >
-          Mark not paid
-        </Button>
-      </div>
-      <div className="text-[11px] text-muted-foreground">
-        {forcedIncomplete ? "You marked this one not paid." : "Based on their last payment."}
-      </div>
-      {error && <Alert variant="destructive">{error}</Alert>}
-    </div>
-  );
-}
-
-function RenewForm({ memberId, layout, onDone }: { memberId: string; layout: Layout; onDone: () => void }) {
+/**
+ * Everything about money for one member. "Mark not paid" lives here rather
+ * than in its own column because it is a statement about payment, and the
+ * owner reaching for it is already thinking about this member's fees.
+ */
+function FeesPanel({
+  member,
+  layout,
+  onDone,
+}: {
+  member: MemberRow;
+  layout: Layout;
+  onDone: () => void;
+}) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const stack = layout === "card";
+  const forcedNotPaid = member.isActiveOverride === false;
 
   function handleSubmit(formData: FormData) {
     setError(null);
-    formData.set("memberId", memberId);
+    formData.set("memberId", member.id);
     startTransition(async () => {
       const result = await recordPayment(formData);
       if (!result.ok) {
@@ -121,33 +108,88 @@ function RenewForm({ memberId, layout, onDone }: { memberId: string; layout: Lay
     });
   }
 
+  // The action has always accepted "auto", but nothing ever sent it — so a
+  // mis-tapped "Mark not paid" could only be undone by recording a payment
+  // that never happened. That is the one bug in here that could put a wrong
+  // number in the books.
+  function toggleNotPaid() {
+    setError(null);
+    const formData = new FormData();
+    formData.set("memberId", member.id);
+    formData.set("statusOverride", forcedNotPaid ? "auto" : "inactive");
+    startTransition(async () => {
+      const result = await setMemberActiveOverride(formData);
+      if (!result.ok) {
+        setError(result.error ?? "Something went wrong");
+        return;
+      }
+      onDone();
+    });
+  }
+
   return (
-    <form action={handleSubmit} className={stack ? "flex flex-col gap-2" : "flex flex-wrap items-center gap-2"}>
-      <Input
-        name="amount"
-        type="number"
-        step="0.01"
-        placeholder="Amount"
-        className={stack ? "w-full" : "w-28"}
-        required
-      />
-      <PlanDuration stack={stack} />
-      <div className="flex gap-2">
-        <Button type="submit" size="sm" loading={isPending}>
-          {isPending ? "Saving..." : "Save"}
+    <div className="space-y-3">
+      <div className="text-sm font-medium">Fees — {member.name}</div>
+
+      <form action={handleSubmit} className={stack ? "flex flex-col gap-3" : "flex flex-wrap items-center gap-2"}>
+        <label className={stack ? "w-full" : "w-full md:w-auto"}>
+          <span className="block text-[11px] text-muted-foreground mb-1">Amount</span>
+          <Input
+            name="amount"
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            placeholder="Amount"
+            defaultValue={member.amount ?? ""}
+            className={stack ? "w-full" : "w-full md:w-28"}
+            required
+          />
+        </label>
+        <PlanDuration stack={stack} />
+        <div className={stack ? "flex gap-2" : "flex gap-2 md:self-end md:pb-0.5"}>
+          <Button type="submit" size="sm" loading={isPending} className={stack ? "flex-1" : undefined}>
+            {isPending ? "Saving..." : "Save payment"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={onDone}
+            className={stack ? "flex-1" : undefined}
+          >
+            Cancel
+          </Button>
+        </div>
+      </form>
+
+      <div className="border-t pt-3">
+        <Button
+          type="button"
+          size="sm"
+          variant={forcedNotPaid ? "secondary" : "ghost"}
+          loading={isPending}
+          onClick={toggleNotPaid}
+          className={`text-muted-foreground ${stack ? "w-full" : ""}`}
+        >
+          {forcedNotPaid ? "Undo — they have paid" : "Mark as not paid"}
         </Button>
-        <Button type="button" size="sm" variant="secondary" onClick={onDone}>
-          Cancel
-        </Button>
+        <p className="text-[11px] text-muted-foreground mt-1.5">
+          {forcedNotPaid
+            ? "You flagged this one. Saving a payment above clears it too."
+            : "For a payment that bounced before their end date — otherwise the dates handle it."}
+        </p>
       </div>
+
       {error && <Alert variant="destructive">{error}</Alert>}
-    </form>
+    </div>
   );
 }
 
 // Shared edit form — identical fields/inputs for both layouts, only the
 // container direction and input widths change (compact wrap on desktop,
-// full-width stack in a mobile card).
+// full-width stack in a mobile card). Delete lives at the bottom: it is the
+// one thing here that cannot be undone, so it sits below a divider rather
+// than beside Save, and still asks twice.
 function EditForm({
   member,
   layout,
@@ -155,6 +197,7 @@ function EditForm({
   error,
   onSubmit,
   onCancel,
+  onDelete,
 }: {
   member: MemberRow;
   layout: Layout;
@@ -162,12 +205,15 @@ function EditForm({
   error: string | null;
   onSubmit: (formData: FormData) => void;
   onCancel: () => void;
+  onDelete: () => void;
 }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const stack = layout === "card";
   const grow = stack ? "w-full" : "flex-1 min-w-[120px]";
   const dateW = stack ? "w-full" : "w-40";
   return (
     <>
+      <div className="text-sm font-medium mb-3">Edit — {member.name}</div>
       <form action={onSubmit} className={stack ? "flex flex-col gap-2" : "flex flex-wrap items-center gap-2"}>
         {member.paymentId && <input type="hidden" name="paymentId" value={member.paymentId} />}
         <Input name="name" defaultValue={member.name} placeholder="Name" className={grow} required />
@@ -189,15 +235,48 @@ function EditForm({
             <Input name="validUntil" type="date" defaultValue={member.validUntil ?? ""} className={dateW} required />
           </>
         )}
-        <div className="flex gap-2">
-          <Button type="submit" size="sm" loading={isPending}>
+        <div className={stack ? "flex gap-2" : "flex gap-2"}>
+          <Button type="submit" size="sm" loading={isPending} className={stack ? "flex-1" : undefined}>
             {isPending ? "Saving..." : "Save"}
           </Button>
-          <Button type="button" size="sm" variant="secondary" onClick={onCancel}>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={onCancel}
+            className={stack ? "flex-1" : undefined}
+          >
             Cancel
           </Button>
         </div>
       </form>
+
+      <div className="border-t mt-3 pt-3">
+        {confirmDelete ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              Delete {member.name} and their payment history? This cannot be undone.
+            </span>
+            <Button type="button" size="sm" variant="destructive" loading={isPending} onClick={onDelete}>
+              {isPending ? "Deleting..." : "Yes, delete"}
+            </Button>
+            <Button type="button" size="sm" variant="secondary" onClick={() => setConfirmDelete(false)}>
+              Keep
+            </Button>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="text-destructive"
+            onClick={() => setConfirmDelete(true)}
+          >
+            Delete this member
+          </Button>
+        )}
+      </div>
+
       {error && (
         <Alert variant="destructive" className="mt-2">
           {error}
@@ -224,8 +303,7 @@ export default function MemberRowItem({
   layout?: Layout;
 }) {
   const [editing, setEditing] = useState(false);
-  const [renewing, setRenewing] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [openingFees, setOpeningFees] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -247,10 +325,7 @@ export default function MemberRowItem({
       const result = await deleteMember(fd);
       // On success the row just disappears once the parent list re-renders
       // (revalidatePath already refreshes the admin page's data).
-      if (!result.ok) {
-        setError(result.error ?? "Could not delete");
-        setConfirmDelete(false);
-      }
+      if (!result.ok) setError(result.error ?? "Could not delete");
     });
   }
 
@@ -266,7 +341,7 @@ export default function MemberRowItem({
     });
   }
 
-  // --- Edit + Renew are shared between layouts; only the wrapper differs. ---
+  // --- Edit + Fees are shared between layouts; only the wrapper differs. ---
   if (editing) {
     const form = (
       <EditForm
@@ -275,6 +350,7 @@ export default function MemberRowItem({
         isPending={isPending}
         error={error}
         onSubmit={handleUpdate}
+        onDelete={handleDelete}
         onCancel={() => {
           setEditing(false);
           setError(null);
@@ -285,24 +361,21 @@ export default function MemberRowItem({
       <Card className="p-4 border-border/60">{form}</Card>
     ) : (
       <TableRow>
-        <TableCell colSpan={11} className="py-3">
+        <TableCell colSpan={10} className="py-3">
           {form}
         </TableCell>
       </TableRow>
     );
   }
 
-  if (renewing) {
-    const form = <RenewForm memberId={member.id} layout={layout} onDone={() => setRenewing(false)} />;
+  if (openingFees) {
+    const panel = <FeesPanel member={member} layout={layout} onDone={() => setOpeningFees(false)} />;
     return layout === "card" ? (
-      <Card className="p-4 border-border/60 space-y-2">
-        <div className="text-sm font-medium">Take payment — {member.name}</div>
-        {form}
-      </Card>
+      <Card className="p-4 border-border/60">{panel}</Card>
     ) : (
       <TableRow>
-        <TableCell colSpan={11} className="py-3">
-          {form}
+        <TableCell colSpan={10} className="py-3">
+          {panel}
         </TableCell>
       </TableRow>
     );
@@ -317,65 +390,75 @@ export default function MemberRowItem({
     <span className="text-destructive">Never</span>
   );
 
+  // A signup nobody has approved has no payment to collect against, and
+  // recordPayment does not approve anybody — so offering Fees here would take
+  // the owner's money entry and still leave the member unable to check in.
+  // Approving is the "Waiting for your OK" panel's job. This is also what put
+  // "Mark not paid" on rows that had never paid anything.
+  const canTakeFees = member.status !== "pending" && member.status !== "rejected";
+
+  const actions = (
+    <>
+      {canTakeFees && (
+        <Button size="sm" onClick={() => setOpeningFees(true)} className={layout === "card" ? "flex-1" : undefined}>
+          Fees
+        </Button>
+      )}
+      <Button
+        size="sm"
+        variant="secondary"
+        onClick={() => setEditing(true)}
+        className={layout === "card" ? "flex-1" : undefined}
+      >
+        Edit
+      </Button>
+      {member.status === "rejected" && (
+        <Button
+          size="sm"
+          variant="secondary"
+          loading={isPending}
+          onClick={handleRestore}
+          className={layout === "card" ? "flex-1" : undefined}
+        >
+          Restore
+        </Button>
+      )}
+    </>
+  );
+
   // --- Mobile card ---
   if (layout === "card") {
     return (
-      <Card className="p-4 border-border/60 space-y-3">
+      // Card is `flex flex-col gap-6`, so a `space-y-3` here does not replace
+      // that 24px gap — it adds 12px of margin on top of it. Every card was
+      // carrying 36px of dead space between each block. Set the flex gap.
+      <Card className="p-4 border-border/60 gap-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="font-medium truncate">{member.name}</div>
             <div className="text-xs text-muted-foreground font-mono">{member.mobile}</div>
           </div>
-          <StatusBadge status={member.status} />
+          <StatusBadge member={member} />
         </div>
 
+        {/* Someone with no payment on file had four facts reading "—" — half
+            the card saying nothing. The table keeps its dashes because columns
+            have to line up; a card has no such excuse. */}
         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-          <Fact label="Plan" value={member.planName} />
-          <Fact label="Amount" value={member.amount != null ? member.amount : "—"} />
-          <Fact label="Paid on" value={fmtDate(member.paidOn)} />
-          <Fact label="Ends on" value={fmtDate(member.validUntil)} />
+          {member.paymentId && (
+            <>
+              <Fact label="Plan" value={member.planName} />
+              <Fact label="Amount" value={member.amount != null ? member.amount : "—"} />
+              <Fact label="Paid on" value={fmtDate(member.paidOn)} />
+              <Fact label="Ends on" value={fmtDate(member.validUntil)} />
+            </>
+          )}
           <Fact label="Last visit" value={lastSeenValue} />
           <Fact label="Member for" value={`${member.tenureDays} days`} />
         </div>
 
-        <MemberOverrideControls member={member} onRenew={() => setRenewing(true)} />
+        <div className="flex gap-2">{actions}</div>
 
-        <div className="flex gap-2">
-          <Button size="sm" variant="secondary" className="flex-1" onClick={() => setEditing(true)}>
-            Edit
-          </Button>
-          {member.status === "rejected" && (
-            <Button
-              size="sm"
-              variant="secondary"
-              className="flex-1"
-              loading={isPending}
-              onClick={handleRestore}
-            >
-              Restore
-            </Button>
-          )}
-          {confirmDelete ? (
-            <Button
-              size="sm"
-              variant="destructive"
-              className="flex-1"
-              loading={isPending}
-              onClick={handleDelete}
-            >
-              {isPending ? "Deleting..." : "Confirm?"}
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="destructive"
-              className="flex-1"
-              onClick={() => setConfirmDelete(true)}
-            >
-              Delete
-            </Button>
-          )}
-        </div>
         {error && (
           <Alert variant="destructive" className="text-left">
             {error}
@@ -385,7 +468,7 @@ export default function MemberRowItem({
     );
   }
 
-  // --- Desktop table row (unchanged) ---
+  // --- Desktop table row ---
   return (
     <TableRow>
       <TableCell>{member.name}</TableCell>
@@ -394,34 +477,13 @@ export default function MemberRowItem({
       <TableCell>{member.amount != null ? member.amount : "—"}</TableCell>
       <TableCell>{fmtDate(member.paidOn)}</TableCell>
       <TableCell>
-        <StatusBadge status={member.status} />
+        <StatusBadge member={member} />
       </TableCell>
       <TableCell>{fmtDate(member.validUntil)}</TableCell>
       <TableCell>{member.tenureDays}d</TableCell>
       <TableCell>{lastSeenValue}</TableCell>
-      <TableCell>
-        <MemberOverrideControls member={member} onRenew={() => setRenewing(true)} />
-      </TableCell>
       <TableCell className="text-right whitespace-nowrap">
-        <div className="flex justify-end gap-1">
-          <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
-            Edit
-          </Button>
-          {member.status === "rejected" && (
-            <Button size="sm" variant="secondary" loading={isPending} onClick={handleRestore}>
-              Restore
-            </Button>
-          )}
-          {confirmDelete ? (
-            <Button size="sm" variant="destructive" loading={isPending} onClick={handleDelete}>
-              {isPending ? "Deleting..." : "Confirm?"}
-            </Button>
-          ) : (
-            <Button size="sm" variant="destructive" onClick={() => setConfirmDelete(true)}>
-              Delete
-            </Button>
-          )}
-        </div>
+        <div className="flex justify-end gap-1">{actions}</div>
         {error && (
           <Alert variant="destructive" className="mt-2 text-left">
             {error}
