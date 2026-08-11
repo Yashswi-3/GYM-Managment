@@ -4,6 +4,7 @@ import { z } from "zod";
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/server";
 import { normalizeMobile } from "@/lib/phone";
+import { publicDbError } from "@/lib/dbError";
 
 const visitSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
@@ -48,7 +49,7 @@ export async function registerAsVisitor(formData: FormData) {
 
   const { error } = await supabase.from("visitors").insert({ name, mobile, email: email || null, remarks: remarks || null });
   if (error) {
-    redirect(`/visit?error=${encodeURIComponent(error.message)}`);
+    redirect(`/visit?error=${encodeURIComponent(publicDbError("visit.insert", error))}`);
   }
 
   redirect(`/visit?done=1&already=0&name=${encodeURIComponent(name)}`);

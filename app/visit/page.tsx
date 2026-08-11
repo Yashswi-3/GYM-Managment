@@ -27,13 +27,41 @@ export default async function VisitPage({
             <p className="text-sm text-muted-foreground mb-6">
               Just your details — no commitment, we&apos;re glad you&apos;re here
             </p>
-            <form action={registerAsVisitor} className="space-y-3 text-left">
-              <Input name="name" placeholder="Name" required />
-              <Input type="tel" inputMode="numeric" name="mobile" placeholder="Mobile number" required />
-              <Input type="email" name="email" placeholder="Email (optional)" />
-              <Textarea name="remarks" placeholder="Remarks (optional)" rows={3} />
+            {/* Same labelling and native-validation reasoning as /join —
+                see the comment there. "Remarks" was a form word nobody says
+                out loud; it is the one field here that invites a sentence. */}
+            <form action={registerAsVisitor} className="space-y-4 text-left">
+              <label className="block">
+                <span className="block text-sm font-medium mb-1.5">Your name</span>
+                <Input name="name" autoComplete="name" placeholder="Name" required />
+              </label>
+              <label className="block">
+                <span className="block text-sm font-medium mb-1.5">Mobile number</span>
+                <Input
+                  type="tel"
+                  inputMode="tel"
+                  name="mobile"
+                  autoComplete="tel"
+                  placeholder="98765 43210"
+                  pattern="[0-9+\-\s]{7,20}"
+                  title="Digits only, plus + - and spaces if you like"
+                  required
+                />
+              </label>
+              <label className="block">
+                <span className="block text-sm font-medium mb-1.5">
+                  Email <span className="text-muted-foreground font-normal">(optional)</span>
+                </span>
+                <Input type="email" name="email" autoComplete="email" placeholder="you@example.com" />
+              </label>
+              <label className="block">
+                <span className="block text-sm font-medium mb-1.5">
+                  Anything we should know? <span className="text-muted-foreground font-normal">(optional)</span>
+                </span>
+                <Textarea name="remarks" placeholder="A trial, a guest pass, who you're here with…" rows={3} />
+              </label>
               {error && <Alert variant="destructive">{error}</Alert>}
-              <FormSubmitButton label="Submit" pendingLabel="Submitting..." className="w-full" />
+              <FormSubmitButton label="Send my details" pendingLabel="Sending..." className="w-full" />
             </form>
           </>
         ) : (

@@ -92,18 +92,24 @@ rendered as "0".
 **Passed:** `tsc --noEmit`, `npm run lint`, a full `next build` from a wiped
 `.next`, and every post-migration row count queried directly.
 
-**Not verified — this matters:** only `PendingSignups` has been seen rendered
-(in isolation, against fixed props, not against the database). The rest has
-not. The
-Supabase clients are untyped (no `Database` generic), so a green build proves
-nothing about column names. Anything touching `approved_at`, `collected`, or
+**Seen rendered at 375px:** `PendingSignups` (in isolation, fixed props), and
+`/join`, `/visit`, `/checkin` — the last against the real dev server, where
+the device check fell through to the mobile form rather than auto-checking in,
+which is the positive signal that `/join` no longer issues a cookie. Every
+input on all three carries a wired `<label>` (`input.labels.length === 1`,
+checked, not assumed) and no page overflows horizontally.
+
+**Still not verified:** the admin panel beyond `PendingSignups`. The Supabase
+clients are untyped (no `Database` generic), so a green build proves nothing
+about column names. Anything touching `approved_at`, `collected`, or
 `rejected_at` is only as correct as the migrations and a careful read.
 
-Manual pass still owed, at 375px:
+Manual pass still owed, at 375px — all of it writes to the live database,
+which is why none of it was done from here:
 
 - [ ] `/join` → new signup appears under "Waiting for your OK"
-- [ ] `/checkin` shows the form, does **not** auto-check-in (proves the cookie is gone)
-- [ ] that mobile at `/checkin` → not found
+- [x] `/checkin` shows the form, does **not** auto-check-in (proves the cookie is gone)
+- [ ] that mobile at `/checkin` → routed to the visitor form, not a dead end
 - [ ] Approve → `/checkin` succeeds
 - [ ] Reject → drops out of pending, shows Rejected, Restore puts it back
 - [ ] Add member with "Payment Not Done" → "Paid this month" does not move
@@ -124,9 +130,10 @@ flow — it just won't send.
 
 ## Known gaps
 
-- **The three public pages (`/join`, `/checkin`, `/visit`) were not
-  redesigned.** They inherit the global touch fixes only. Members are also
-  non-technical and also on phones.
+- ~~The three public pages were not redesigned.~~ **Done** — see "Public pages"
+  below. What is still open there: `/join` requires an email, and some members
+  won't have one; and `normalizeMobile` keeps the *last 10* digits while the
+  schema accepts 7, so two short numbers could in principle collide.
 - ~~Pending rows still need a card layout at 375px.~~ **Done** — `PendingSignups`
   stacks below `md` and keeps the single row above it. Measured at 375px: every
   control full-width and 44px tall, no horizontal overflow.
@@ -138,5 +145,34 @@ flow — it just won't send.
   equivalent bug on the admin path is fixed.
 - **`plan_name` history is inconsistent** — `Month`, `monthly`, `monthly`.
   The term picker stops it spreading but does not clean up what's there.
-- **No test runner in this repo.** Adding one means a new dev dependency; it
-  hasn't been done rather than done quietly.
+- **The test runner is `node --test`, and there is exactly one test.**
+  `npm test`. No dev dependency was added — Node strips the types itself,
+  which is why `allowImportingTsExtensions` is on and why the test imports
+  `./dbError.ts` with the extension. `lib/dbError.test.ts` guards one thing:
+  that Postgres' own wording can never reach a member's screen. It was
+  confirmed to fail when the function is mutated to return `error.message`,
+  so it is not a test that cannot fail.
+
+## Public pages — done 2026-08-11
+
+`/join`, `/visit`, `/checkin`. The layout was already right (single column,
+`max-w-sm`, full-width buttons), so it was left alone. Four real defects were
+fixed instead:
+
+1. **Raw database errors were rendered to members** at four call sites —
+   `error.message` is Postgres' own text and names constraints and columns.
+   Now routed through `publicDbError()` in `lib/dbError.ts`, which logs the
+   real thing server-side and returns one plain sentence. Same one-chokepoint
+   shape as `findApprovedMemberByMobile`.
+2. **Every input was placeholder-only** — no `<label>` anywhere, so the
+   placeholder was the only hint what a box was for, and it disappears the
+   moment you type. A screen reader had nothing at all.
+3. **A server-side validation failure redirects and wipes the whole form.**
+   Native constraints (`type`, `pattern`, `required`) now catch typos in the
+   browser, so the round-trip that costs a member all three fields is rare
+   rather than routine. The mobile pattern deliberately accepts `+`, `-` and
+   spaces, because `lib/phone.ts` strips them anyway.
+4. **The approval gate had made two screens lie.** `/join`'s success screen
+   didn't say you cannot check in until the owner confirms you, and
+   `/checkin`'s visitor stage greeted a waiting signup with "First time
+   here?" — both now say what is actually true.

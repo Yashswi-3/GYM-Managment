@@ -4,6 +4,7 @@ import { z } from "zod";
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/server";
 import { normalizeMobile } from "@/lib/phone";
+import { publicDbError } from "@/lib/dbError";
 
 const joinSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
@@ -57,7 +58,7 @@ export async function joinAsMember(formData: FormData) {
 
   const { error } = await supabase.from("members").insert({ name, mobile, email });
   if (error) {
-    redirect(`/join?error=${encodeURIComponent(error.message)}`);
+    redirect(`/join?error=${encodeURIComponent(publicDbError("join.insert", error))}`);
   }
 
   redirect(`/join?done=1&already=0&name=${encodeURIComponent(name)}`);

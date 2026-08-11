@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase/server";
 import { normalizeMobile } from "@/lib/phone";
 import { rememberDeviceForMember, resolveDeviceToken } from "@/lib/deviceToken";
+import { publicDbError } from "@/lib/dbError";
 
 const mobileSchema = z.string().trim().min(7, "Enter a valid mobile number").max(20);
 const nameSchema = z.string().trim().min(1, "Name is required").max(100);
@@ -48,14 +49,17 @@ export async function lookupMobile(mobileInput: string) {
  */
 export async function checkInMember(mobileInput: string) {
   const parsed = mobileSchema.safeParse(mobileInput);
-  if (!parsed.success) return { ok: false as const, error: "Invalid mobile number" };
+  if (!parsed.success) return { ok: false as const, error: "That number doesn't look right." };
 
+  // Reachable only if the member was rejected, or their approval was undone,
+  // between the lookup a moment ago and this tap. "Member not found" read as
+  // "you do not exist" to someone who is standing at the door and does.
   const member = await findApprovedMemberByMobile(parsed.data);
-  if (!member) return { ok: false as const, error: "Member not found" };
+  if (!member) return { ok: false as const, error: "We couldn't check you in. Please ask at the desk." };
 
   const supabase = await createServiceClient();
   const { error } = await supabase.from("attendance").insert({ member_id: member.id });
-  if (error) return { ok: false as const, error: error.message };
+  if (error) return { ok: false as const, error: publicDbError("checkin.attendance", error) };
 
   await rememberDeviceForMember(member.id);
 
@@ -87,7 +91,7 @@ export async function registerVisitor(nameInput: string, mobileInput: string) {
     .from("visitors")
     .insert({ name: name.data, mobile: normalizedMobile });
 
-  if (error) return { ok: false as const, error: error.message };
+  if (error) return { ok: false as const, error: publicDbError("checkin.visitor", error) };
   return { ok: true as const, name: name.data };
 }
 

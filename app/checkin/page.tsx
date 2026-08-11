@@ -96,8 +96,9 @@ export default function CheckInPage() {
     <div className="container max-w-sm py-16 md:py-24">
       <Card className="p-8 text-center border-border/60">
         {stage === "checking-device" && (
-          <div className="py-8">
+          <div className="py-8" role="status">
             <Loader2 className="size-6 text-muted-foreground mx-auto animate-spin" />
+            <span className="sr-only">Checking if this phone is recognised…</span>
           </div>
         )}
 
@@ -108,17 +109,26 @@ export default function CheckInPage() {
             <p className="text-sm text-muted-foreground mb-6">
               Enter your mobile number to check in
             </p>
+            {/* min-h-12, not h-12: a fixed height is the thing the size
+                variants were centralised to stop, and it clips descenders if
+                the OS font is scaled up. The visible label is the input's
+                only name — the heading above it says "Welcome in", not what
+                the box wants. */}
             <form onSubmit={handleMobileSubmit} className="space-y-3">
-              <Input
-                type="tel"
-                inputMode="numeric"
-                placeholder="Mobile number"
-                value={mobile}
-                onChange={(e) => setMobile(e.target.value)}
-                required
-                autoFocus
-                className="h-12 text-center text-lg"
-              />
+              <label className="block text-left">
+                <span className="block text-sm font-medium mb-1.5">Your mobile number</span>
+                <Input
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="98765 43210"
+                  value={mobile}
+                  onChange={(e) => setMobile(e.target.value)}
+                  required
+                  autoFocus
+                  className="min-h-12 text-center text-lg"
+                />
+              </label>
               {error && <Alert variant="destructive">{error}</Alert>}
               <Button type="submit" loading={isPending} size="lg" className="w-full">
                 {isPending ? "Checking..." : "Continue"}
@@ -145,22 +155,32 @@ export default function CheckInPage() {
           <>
             <UserPlus className="size-8 text-primary mx-auto mb-4" strokeWidth={2} />
             <h1 className="font-display text-2xl font-semibold mb-1">Nice to meet you</h1>
+            {/* This stage is reached by two different people: a genuine
+                walk-in, and a member who signed up but the owner hasn't
+                confirmed yet — the approval gate sends both here. "First time
+                here?" was wrong for the second one, who had already given
+                their details and would reasonably think the gym lost them. */}
             <p className="text-sm text-muted-foreground mb-6">
-              First time here? Just your name to get started
+              We don&apos;t have that number yet. Leave your name and we&apos;ll sign you in for today — if
+              you&apos;ve already signed up, the owner still needs to confirm you.
             </p>
             <form onSubmit={handleVisitorSubmit} className="space-y-3">
-              <Input
-                type="text"
-                placeholder="Your name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                autoFocus
-                className="h-12 text-center text-lg"
-              />
+              <label className="block text-left">
+                <span className="block text-sm font-medium mb-1.5">Your name</span>
+                <Input
+                  type="text"
+                  autoComplete="name"
+                  placeholder="Your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  autoFocus
+                  className="min-h-12 text-center text-lg"
+                />
+              </label>
               {error && <Alert variant="destructive">{error}</Alert>}
               <Button type="submit" loading={isPending} size="lg" className="w-full">
-                {isPending ? "Saving..." : "Register"}
+                {isPending ? "Saving..." : "Sign me in"}
               </Button>
             </form>
           </>
