@@ -25,11 +25,16 @@ export interface MemberRow {
   isActiveOverride: boolean | null;
   /** `collected` on their latest payment — drives the Fees worklist. */
   latestPaymentCollected: boolean | null;
+  /** members.plan_price. Null falls back to `amount` (what they last paid). */
+  planPrice: number | null;
   status: MemberStatus;
   tenureDays: number;
   lastSeen: string | null;
   inactive7: boolean;
   paidThisMonth: boolean;
+  /** Distinct days they turned up — how a name becomes a person you know. */
+  daysThisMonth: number;
+  daysLastMonth: number;
 }
 
 export type MemberFilter = "all" | "paid" | "unpaid" | "expiring";

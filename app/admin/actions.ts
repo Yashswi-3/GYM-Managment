@@ -105,12 +105,12 @@ export async function addMemberWithPayment(formData: FormData) {
     // payment for them by hand is the same decision Activate makes, so it
     // approves them here too — otherwise they'd stay stuck in Pending with a
     // payment on file. Already-approved rows keep their original timestamp.
-    const patch: { email?: string; approved_at?: string } = {};
+    const patch: { email?: string; approved_at?: string; plan_price: number } = {
+      plan_price: amount,
+    };
     if (email) patch.email = email;
     if (!existing.approved_at) patch.approved_at = new Date().toISOString();
-    if (Object.keys(patch).length > 0) {
-      await supabase.from("members").update(patch).eq("id", memberId);
-    }
+    await supabase.from("members").update(patch).eq("id", memberId);
   } else {
     const { data: created, error: insertError } = await supabase
       .from("members")
@@ -119,6 +119,7 @@ export async function addMemberWithPayment(formData: FormData) {
         mobile,
         email: email || null,
         plan_name: planName,
+        plan_price: amount,
         // Added by the owner directly — approved by construction.
         approved_at: new Date().toISOString(),
       })
@@ -211,7 +212,10 @@ export async function activatePendingMember(formData: FormData) {
 
   const { data: member, error: memberError } = await supabase
     .from("members")
-    .update({ plan_name: planName, approved_at: new Date().toISOString() })
+    // plan_price is what this member is charged from now on. Stamping it at
+    // every money event keeps it current, and means the one or two members on
+    // a different rate stay right without anyone maintaining a price list.
+    .update({ plan_name: planName, plan_price: amount, approved_at: new Date().toISOString() })
     .eq("id", memberId)
     .select("mobile, name, email")
     .single();
@@ -262,7 +266,8 @@ export async function recordPayment(formData: FormData) {
 
   await supabase
     .from("members")
-    .update({ is_active_override: null })
+    // Also refreshes their price — what he just charged is what they are on.
+    .update({ is_active_override: null, plan_price: parsed.data.amount })
     .eq("id", parsed.data.memberId);
 
   revalidatePath("/admin");
@@ -405,7 +410,13 @@ export async function updateMember(formData: FormData) {
     // payment is entered correctly. `collected` moves with the override for
     // the same reason: leaving it false would show the member Active while
     // still excluding them from "Paid this month".
-    await supabase.from("members").update({ is_active_override: null }).eq("id", memberId);
+    // plan_price follows the corrected amount for the same reason it is
+    // stamped on every other money path: a typo fixed here would otherwise
+    // leave every future "expected" figure quoting the wrong number.
+    await supabase
+      .from("members")
+      .update({ is_active_override: null, plan_price: amount })
+      .eq("id", memberId);
   }
 
   revalidatePath("/admin");

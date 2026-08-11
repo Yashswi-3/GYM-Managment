@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { memberStatus, daysSince } from "@/lib/status";
+import { attendanceDaysByMember, daysInMonth } from "@/lib/attendance";
+import { currentMonthKey, shiftMonth, monthKey } from "@/lib/money";
 import type { MemberRow } from "./MembersTable";
 import type { PendingMember } from "./PendingSignups";
 import type { VisitorRow } from "./VisitorsTable";
@@ -19,7 +21,7 @@ export default async function AdminDashboard() {
       supabase
         .from("members")
         .select(
-          "id, name, mobile, email, join_date, plan_name, is_active_override, approved_at, rejected_at"
+          "id, name, mobile, email, join_date, plan_name, plan_price, is_active_override, approved_at, rejected_at"
         ),
       supabase
         .from("payments")
@@ -36,7 +38,8 @@ export default async function AdminDashboard() {
     ]);
 
   const now = new Date();
-  const currentMonthKey = `${now.getFullYear()}-${now.getMonth()}`;
+  const thisMonthKey = currentMonthKey(now);
+  const lastMonthKey = shiftMonth(thisMonthKey, -1);
 
   const latestPaymentByMember = new Map<
     string,
@@ -54,10 +57,13 @@ export default async function AdminDashboard() {
       latestPaymentByMember.set(p.member_id, p);
     }
     if (!newestPayment || p.paid_on > newestPayment.paid_on) newestPayment = p;
-    const paidOn = new Date(p.paid_on);
     // `collected` is what separates money actually taken from a row that only
     // records what's owed — a "Payment Not Done" activation writes the latter.
-    if (p.collected && `${paidOn.getFullYear()}-${paidOn.getMonth()}` === currentMonthKey) {
+    // The month comes from slicing the ISO string: paid_on is date-only, so
+    // `new Date(...)` gives UTC midnight, which reads as the previous month
+    // for anyone west of Greenwich. This used to parse the date and was the
+    // same bug lib/money was written to avoid, in the one place it was not used.
+    if (p.collected && monthKey(p.paid_on) === thisMonthKey) {
       paidThisMonthMembers.add(p.member_id);
     }
   }
@@ -69,6 +75,12 @@ export default async function AdminDashboard() {
       lastSeenByMember.set(a.member_id, a.checked_in_at);
     }
   }
+
+  // Distinct days attended, this month and last — "last visit" alone cannot
+  // tell a four-times-a-week member from one who came once and vanished.
+  const attendedDays = attendanceDaysByMember(
+    (attendance ?? []).map((a) => ({ memberId: a.member_id, checkedInAt: a.checked_in_at }))
+  );
 
   const memberNameById = new Map<string, string>();
   const memberRows: MemberRow[] = (members ?? []).map((m) => {
@@ -88,6 +100,9 @@ export default async function AdminDashboard() {
       validUntil: latestPayment?.valid_until ?? null,
       isActiveOverride: m.is_active_override ?? null,
       latestPaymentCollected: latestPayment ? latestPayment.collected : null,
+      // What they are charged. Null falls back to what they last paid, which
+      // is what every owed figure used before the column existed.
+      planPrice: m.plan_price ?? null,
       // Self-signed-up members the owner hasn't approved are "pending", not
       // "expired". Keyed off approved_at rather than "has zero payments" so
       // there is exactly one definition of approved in the app — see
@@ -108,6 +123,8 @@ export default async function AdminDashboard() {
       // *current calendar month* specifically, which is what the "Paid this
       // month" / "Unpaid this month" stat cards count and filter by.
       paidThisMonth: paidThisMonthMembers.has(m.id),
+      daysThisMonth: daysInMonth(attendedDays.get(m.id), thisMonthKey),
+      daysLastMonth: daysInMonth(attendedDays.get(m.id), lastMonthKey),
     };
   });
 

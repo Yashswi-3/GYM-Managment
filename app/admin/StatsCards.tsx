@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
-import { Users, CreditCard, UserX, Sparkles, Repeat } from "lucide-react";
+import { Users, CreditCard, UserX, Sparkles, Repeat, IndianRupee } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { inr } from "@/lib/money";
 import type { MemberFilter } from "./MembersTable";
 
 export default function StatsCards({
@@ -9,26 +10,52 @@ export default function StatsCards({
   unpaidCount,
   visitorCount,
   convertedCount,
+  collectedThisMonth,
   onFilterSelect,
+  onOpenMoney,
 }: {
   totalMembers: number;
   paidCount: number;
   unpaidCount: number;
   visitorCount: number;
   convertedCount: number;
+  collectedThisMonth: number;
   /** Clicking Total/Paid/Unpaid jumps to the Members tab pre-filtered. */
   onFilterSelect?: (filter: MemberFilter) => void;
+  /** The money tile opens the fees book rather than filtering members. */
+  onOpenMoney?: () => void;
 }) {
   const stats: {
     label: string;
     value: string | number;
     icon: LucideIcon;
-    tone?: "warn";
-    filter?: MemberFilter;
+    tone?: "warn" | "good";
+    onSelect?: () => void;
   }[] = [
-    { label: "Members", value: totalMembers, icon: Users, filter: "all" },
-    { label: "Paid this month", value: paidCount, icon: CreditCard, filter: "paid" },
-    { label: "Not paid", value: unpaidCount, icon: UserX, tone: "warn", filter: "unpaid" },
+    { label: "Members", value: totalMembers, icon: Users, onSelect: onFilterSelect && (() => onFilterSelect("all")) },
+    {
+      label: "Paid this month",
+      value: paidCount,
+      icon: CreditCard,
+      onSelect: onFilterSelect && (() => onFilterSelect("paid")),
+    },
+    {
+      label: "Not paid",
+      value: unpaidCount,
+      icon: UserX,
+      tone: "warn",
+      onSelect: onFilterSelect && (() => onFilterSelect("unpaid")),
+    },
+    // The sixth tile replaces a full-width money card that sat above this grid
+    // breaking the row of squares. One number — what came in this month — and
+    // a tap into the fees book, where the detail belongs.
+    {
+      label: "Collected this month",
+      value: inr(collectedThisMonth),
+      icon: IndianRupee,
+      tone: "good",
+      onSelect: onOpenMoney,
+    },
     { label: "Visitors, all time", value: visitorCount, icon: Sparkles },
     {
       label: "Visitors who joined",
@@ -37,10 +64,15 @@ export default function StatsCards({
     },
   ];
 
+  const iconTone = {
+    warn: "text-destructive",
+    good: "text-[oklch(0.8_0.15_145)]",
+  } as const;
+
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
       {stats.map((s) => {
-        const clickable = !!s.filter && !!onFilterSelect;
+        const clickable = !!s.onSelect;
         return (
           <Card
             key={s.label}
@@ -49,15 +81,21 @@ export default function StatsCards({
               ? {
                   role: "button",
                   tabIndex: 0,
-                  onClick: () => onFilterSelect!(s.filter!),
+                  onClick: s.onSelect,
                   onKeyDown: (e: React.KeyboardEvent) => {
-                    if (e.key === "Enter" || e.key === " ") onFilterSelect!(s.filter!);
+                    if (e.key === "Enter" || e.key === " ") s.onSelect!();
                   },
                 }
               : {})}
           >
-            <s.icon className={`size-4 mb-2 ${s.tone === "warn" ? "text-destructive" : "text-primary"}`} />
-            <div className="text-2xl font-display font-semibold">{s.value}</div>
+            <s.icon className={`size-4 mb-2 ${s.tone ? iconTone[s.tone] : "text-primary"}`} />
+            <div
+              className={`text-2xl font-display font-semibold tabular-nums ${
+                s.tone === "good" ? iconTone.good : ""
+              }`}
+            >
+              {s.value}
+            </div>
             <div className="text-xs text-muted-foreground">{s.label}</div>
           </Card>
         );

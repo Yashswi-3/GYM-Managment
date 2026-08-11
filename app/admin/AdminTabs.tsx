@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
+import { monthKey, currentMonthKey } from "@/lib/money";
 import { LayoutDashboard, Users, Sparkles, Plus, X, QrCode, IndianRupee } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import StatsCards from "./StatsCards";
@@ -13,7 +14,7 @@ import AddMemberForm from "./AddMemberForm";
 import MembersTable, { type MemberRow, type MemberFilter } from "./MembersTable";
 import AddVisitorForm from "./AddVisitorForm";
 import VisitorsTable, { type VisitorRow } from "./VisitorsTable";
-import MoneyTab, { MoneyCard, type PaymentRow } from "./MoneyTab";
+import MoneyTab, { type PaymentRow } from "./MoneyTab";
 
 type Tab = "overview" | "members" | "money" | "visitors";
 
@@ -45,6 +46,15 @@ export default function AdminTabs({
   paymentRows: PaymentRow[];
 }) {
   const [tab, setTab] = useState<Tab>("overview");
+  // The one money number the Overview carries. Everything else about fees is
+  // one tap away in its own tab, where it can be asked per month.
+  const collectedThisMonth = useMemo(() => {
+    const thisMonth = currentMonthKey();
+    return paymentRows.reduce(
+      (sum, p) => (p.collected && monthKey(p.paidOn) === thisMonth ? sum + p.amount : sum),
+      0
+    );
+  }, [paymentRows]);
   const [memberFilter, setMemberFilter] = useState<MemberFilter>("all");
   const [showQR, setShowQR] = useState(false);
   // The add-member / add-visitor forms stay collapsed behind the "+" button
@@ -119,19 +129,19 @@ export default function AdminTabs({
         <div className="space-y-6">
           <NeedsYou
             pendingCount={pendingMembers.length}
-            unpaidCount={unpaidCount}
             expiringCount={expiringCount}
             onGoToPending={() => switchTab("members")}
             onFilterSelect={goToMembersFiltered}
           />
-          <MoneyCard payments={paymentRows} members={memberRows} onOpen={() => switchTab("money")} />
           <StatsCards
             totalMembers={totalMembers}
             paidCount={paidCount}
             unpaidCount={unpaidCount}
             visitorCount={visitorCount}
             convertedCount={convertedCount}
+            collectedThisMonth={collectedThisMonth}
             onFilterSelect={goToMembersFiltered}
+            onOpenMoney={() => switchTab("money")}
           />
           <ActivityFeed rows={activity} />
 

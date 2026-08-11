@@ -34,6 +34,13 @@ export function monthLabel(key: string): string {
   return date.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
 }
 
+/** "2026-08" shifted by whole months: -1 -> "2026-07", +1 -> "2026-09". */
+export function shiftMonth(key: string, delta: number): string {
+  const [year, month] = key.split("-").map(Number);
+  const d = new Date(year, month - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 /** The N most recent months ending at `now`, oldest first. */
 export function recentMonthKeys(count: number, now: Date = new Date()): string[] {
   const keys: string[] = [];

@@ -1,7 +1,7 @@
 "use client";
 
 import { Card } from "@/components/ui/card";
-import { UserCheck, IndianRupee, CalendarClock, Check, ChevronRight } from "lucide-react";
+import { UserCheck, CalendarClock, Check, ChevronRight } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { MemberFilter } from "./MembersTable";
 
@@ -13,16 +13,20 @@ import type { MemberFilter } from "./MembersTable";
  * Each row is a whole tappable card rather than a small link, because this is
  * used one-handed on a phone. Rows with a count of zero are dropped instead of
  * shown as "0" — a zero is not a task, and an empty list is the good outcome.
+ *
+ * **"N members have not paid" used to be a row here and is deliberately gone.**
+ * It counted anyone without a payment dated inside the current calendar month,
+ * so on the 1st it read as the whole gym and decayed all month — a number that
+ * starts at maximum and falls on its own is a calendar artefact, not a task.
+ * Who actually owes money is a monthly question and it lives in the fees book.
  */
 export default function NeedsYou({
   pendingCount,
-  unpaidCount,
   expiringCount,
   onGoToPending,
   onFilterSelect,
 }: {
   pendingCount: number;
-  unpaidCount: number;
   expiringCount: number;
   onGoToPending: () => void;
   onFilterSelect: (filter: MemberFilter) => void;
@@ -46,15 +50,6 @@ export default function NeedsYou({
       onSelect: onGoToPending,
     },
     {
-      key: "unpaid",
-      count: unpaidCount,
-      title: unpaidCount === 1 ? "member has not paid" : "members have not paid",
-      hint: "No payment recorded this month.",
-      icon: IndianRupee,
-      tone: "text-destructive",
-      onSelect: () => onFilterSelect("unpaid"),
-    },
-    {
       key: "expiring",
       count: expiringCount,
       title: expiringCount === 1 ? "membership ends soon" : "memberships end soon",
@@ -72,7 +67,8 @@ export default function NeedsYou({
         <div>
           <div className="font-semibold">Nothing needs you right now</div>
           <div className="text-sm text-muted-foreground">
-            Everyone is approved, paid up, and not about to expire.
+            Nobody is waiting for approval and no membership ends in the next three days. Money is
+            in the fees book.
           </div>
         </div>
       </Card>

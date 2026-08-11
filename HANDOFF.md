@@ -1,19 +1,24 @@
 # Handoff — approval gate, payment truthfulness, mobile rewrite, fees book
 
 Written 2026-08-11 and shipped the same day across five pushes
-(`44eb3e9..4576683`). The three migrations **were applied to the live database
-by hand before any of this code was committed**, so the schema is ahead of
-`main`'s history rather than behind it.
+(`44eb3e9..4576683`), then the fees book was rebuilt around the calendar month
+later the same day (uncommitted at the time of writing). Migrations `0010`-`0012`
+**were applied to the live database by hand before any of that code was
+committed**, so the schema is ahead of `main`'s history rather than behind it.
+**`0013` has not been applied and the new code does not run without it.**
 
 Read this before touching the admin panel, the check-in flow, or any number
 with a rupee sign in front of it.
 
-**The two rules everything else hangs off:**
+**The three rules everything else hangs off:**
 
 1. **Approval is `members.approved_at`** — never "has payment rows".
 2. **Money in counts only `collected = true`; money owed is derived from
    memberships, never from payment rows.** Mixing those is how the owner's
    headline number goes wrong, and it has gone wrong twice already.
+3. **Members are billed on their own renewal date and reported by calendar
+   month.** A term ending 12 August is August's money. Confirmed by the owner
+   2026-08-11. Anything that asks "is this paid" must say *for which month*.
 
 ---
 
@@ -42,6 +47,12 @@ the 28 had ever checked in, which is why closing the hole locked nobody out.
 | `0010_member_approval.sql` | `members.approved_at timestamptz` + backfill | ✅ |
 | `0011_payment_collected.sql` | `payments.collected boolean not null default true` | ✅ |
 | `0012_member_rejected.sql` | `members.rejected_at timestamptz` | ✅ |
+| `0013_member_plan_price.sql` | `members.plan_price numeric(10,2)` + backfill | ❌ **not yet** |
+
+> **`0013` must be applied before this code is deployed.** `app/admin/page.tsx`
+> selects `plan_price`; against a database without the column Supabase fails the
+> whole select and the admin page renders empty. It is additive and the backfill
+> only writes rows where `plan_price is null`, so re-running it is safe.
 
 All three are additive. Nothing was deleted or moved — `count(*)` on `members`
 was 31 before and after. `0010`'s backfill approves exactly those members who
@@ -102,6 +113,25 @@ out of that, and new UI should follow them:
 what needs the owner today. Rows with a count of zero are dropped rather than
 rendered as "0".
 
+**"N members have not paid" was removed from it.** It counted anyone without a
+payment dated inside the current calendar month, so on the 1st it read as the
+entire gym and decayed all month. A number that starts at maximum and falls on
+its own is a calendar artefact, not a task. Who owes money is a monthly
+question and it is answered per month in the fees book.
+
+**The Overview is six square tiles and nothing else.** The full-width `MoneyCard`
+that used to sit above the grid is gone — it broke the row of squares and
+duplicated the fees tab at lower fidelity. The sixth tile is collected-this-
+month and taps through to Fees. `StatsCards` is `grid-cols-2 sm:grid-cols-3`,
+so six tiles always fill complete rows at both widths.
+
+**The status badge answers "can they train today", not "have they paid".**
+`active` reads "Active", not "Paid" — with a fees worklist in the app the old
+label contradicted itself, putting a green "Paid" directly above "₹2,500
+expected" for a member whose term runs to the 19th. `expired` reads "Membership
+ended". `inactive` keeps "Not paid" because it is the one status the owner sets
+by hand, to say the money did not come.
+
 ## Verified, and not
 
 **Passed:** `tsc --noEmit`, `npm run lint`, a full `next build` from a wiped
@@ -143,6 +173,19 @@ which is why none of it was done from here:
 - [ ] Reject → drops out of pending, shows Rejected, Restore puts it back
 - [ ] Add member with "Payment Not Done" → "Paid this month" does not move
 
+Added by the month rebuild, and **all of it depends on migration `0013` being
+applied first**:
+
+- [ ] Admin loads at all — proves `plan_price` exists in the database
+- [ ] Fees opens on the current month with four numbers that add up:
+      `Expected = Collected + Still to collect`
+- [ ] Take a payment from the worklist → the member moves from "Not paid" to
+      "Received", Collected rises, **Expected does not change**. This is the
+      one behaviour the whole rewrite is for.
+- [ ] `◀` to last month → its totals are the same before and after the payment
+      above, and no arrears block is shown on a past month
+- [ ] A member card shows plausible "came this month / last month" day counts
+
 ## Local setup
 
 `.env.local` is gitignored; copy `.env.example` and fill it from the Supabase
@@ -174,17 +217,18 @@ flow — it just won't send.
   equivalent bug on the admin path is fixed.
 - **`plan_name` history is inconsistent** — `Month`, `monthly`, `monthly`.
   The term picker stops it spreading but does not clean up what's there.
-- **There is no plan price.** What a member "owes" is taken from what they
-  last paid, which is the only price signal the schema carries. If prices ever
-  differ from the last receipt, every owed figure drifts. A `plan_price`
-  column, or a `plans` table, is the fix — additive either way.
+- ~~There is no plan price.~~ **Done** — `members.plan_price`, migration `0013`,
+  stamped on every money path. What is still open: a member who has never paid
+  and has never had a price set is excluded from Expected rather than counted
+  as zero, because guessing their fee would be worse than admitting it is
+  unknown. They are unapproved signups, so approving them fixes it.
 - **28 pending signups is ~10 screens of scroll**, and the members list has
   the same shape at 31. Nothing paginates. A "show 10, load more" is a few
   lines; it has not been done because he has not said the list is a problem.
 - **Nothing is server-paginated either** — `app/admin/page.tsx` selects every
   member, payment, attendance row and visitor on each load, and ships them all
   to the client. Fine at 31 members, not at 500.
-- **The test runner is `node --test` and there are 13 tests.** `npm test`. No
+- **The test runner is `node --test` and there are 17 tests.** `npm test`. No
   dev dependency — Node strips the types itself, which is why
   `allowImportingTsExtensions` is on in `tsconfig.json` and why these files
   import each other **with the `.ts` extension** (`./money.ts`). Drop the
@@ -193,59 +237,105 @@ flow — it just won't send.
     screen. Confirmed to fail when the function is mutated to return
     `error.message`, so it is not a test that cannot fail.
   - `lib/money.test.ts` — month keys, the year-boundary walk, rupee format.
-  - `lib/dues.test.ts` — the owed buckets, including the regression that a
-    member is never billed twice.
+  - `lib/fees.test.ts` — the month book. The one that matters is *"recording a
+    payment moves a member without changing what the month expected"*; the rest
+    pin the price fallback, arrears staying out of the month, and a member with
+    both a taken and untaken payment being counted once.
+  - `lib/attendance.test.ts` — distinct days, and that the day is local rather
+    than UTC (a 6am check-in in India is the previous date in UTC).
   They cover the money maths, not the UI. There is still no component test.
 
-## The Fees dashboard — done 2026-08-11
+## The Fees dashboard — rebuilt around the month, 2026-08-11
 
-A fourth tab (`MoneyTab.tsx`), plus a `MoneyCard` on Overview that taps
-through to it.
+The fourth tab (`MoneyTab.tsx`). **`lib/dues.ts` is gone; `lib/fees.ts`
+replaces it.**
 
-**It is a worklist first, a ledger second.** The first version led with
-history, which was the wrong shape: the owner does not open this to read what
-happened, he opens it to collect. Every billing product converges on the same
-answer — Gymdesk's payments card is *scheduled / received / overdue*, Chargebee
-and Stripe age the overdue into buckets, and every element points at a next
-action. So the tab opens on **To collect**, grouped and ordered by who to chase
-first, with the Fees button on each row.
+### Why it was rebuilt: the app was running two billing models at once
 
-The worklist rows are ordinary `MemberRowItem` cards. Taking payment from the
-worklist is therefore the *same* panel as taking it from the Members tab — a
-second way to record money is a second way to record it wrong.
+"Paid this month" counted a payment dated inside the current calendar month.
+The Fees buckets asked whether `valid_until` had passed. Those are *calendar*
+and *anniversary* billing respectively, and a member who joined on the 12th sat
+in both: "not paid" on the Overview and "not due yet" in Fees, on the same day,
+on the same person. No amount of restyling fixes a screen whose two halves
+disagree about what a month is.
 
-### The three owed-buckets are disjoint, and that is load-bearing
+Settled with the owner: **billing is on each member's renewal date, reporting
+is by calendar month.** One model, and it is the one the schema already stored.
 
-`lib/dues.ts` puts every member in **exactly one** of:
+### The identity the whole tab hangs off
 
-| Bucket | Meaning |
+For any month M, `buildMonthBook()` puts every rupee in exactly one place:
+
+| | |
 |---|---|
-| **Never paid for** | latest payment has `collected = false` — they owe the term they already used |
-| **Overdue** | `valid_until` has passed and the last payment *was* collected |
-| **Due this month** | `valid_until` falls later this calendar month |
+| **collected** | payments dated in M with `collected = true` |
+| **notTaken** | payments dated in M with `collected = false` |
+| **stillToCollect** | members whose term ends in M with no payment in M |
 
-`stillToCollect` is the sum of all three, which is only valid because they do
-not overlap. **The first cut got this wrong:** a member past their date whose
-last payment was never collected landed in *both* "overdue" and a separate
-"not taken" banner, billing the same rupees twice while the banner claimed it
-was "counted in neither total". `latestPaymentCollected` is checked first, and
-`dues.test.ts` has a regression test for exactly that member.
+```
+expected = collected + notTaken + stillToCollect
+```
 
-A member's expected amount is **what they last paid** — the schema stores no
-plan price. A member with no payment is not a debtor, they are an unapproved
-signup, and is excluded.
+**Recording a payment moves a member from `stillToCollect` into `collected` and
+leaves `expected` untouched.** That is the property the old design lacked: it
+derived what was due from live `valid_until`, so the headline shrank every time
+someone paid. A total that falls as you work it cannot be a target, and cannot
+answer "what was August worth". `fees.test.ts` pins this — it is the test to
+keep if you keep only one.
 
-**Money in and money owed are computed from different places, on purpose.**
-Money *in* counts payment rows with `collected = true` only — summing all rows
-is the Phase 1 bug again, in the optimistic direction. Money *owed* is derived
-from memberships in `lib/dues.ts` and never from payment rows, which is what
-keeps the buckets disjoint.
+Money owed is counted per member, money in per payment, so the identity holds
+even when one member has both a taken and an untaken payment inside one month.
 
-The tab has three sections: **To collect** (the worklist, and the default),
-**Received** (the ledger, searchable and month-filterable), and **Trend**
-(six months of bars). The `MoneyCard` on Overview shows collected-this-month
-beside still-to-collect, and its "N late" is `notTaken + overdue` — counting
-only one of those made the card disagree with the tab.
+**Arrears are deliberately outside the month.** `arrears()` lists terms that
+ended before M and were never renewed. Folding them into M's total would mean
+August's figure changed depending on when you looked at it, and a month whose
+number moves after the fact is not a record of anything. Shown only against the
+current month.
+
+### The tab
+
+A month selector at the top (`◀ Aug 2026 ▶`, capped at the current month) frames
+everything below it. Four tiles — **Expected / Collected / Still to collect /
+Members paid (n of m)** — then three sections: **Not paid** (the worklist plus
+the arrears block), **Received** (that month's payments), **Trend** (six bars,
+tap one to jump to that month, plus all-time).
+
+Worklist rows are ordinary `MemberRowItem` cards, so recording a payment is the
+same panel everywhere — a second way to record money is a second way to record
+it wrong. In worklist context the card drops to four facts (ends on, last visit,
+came this month, came last month): eight facts per row is what made the list
+unreadable, and how much and how late are already in the note above them.
+
+### Plan price, and what it fixed
+
+`members.plan_price` (migration `0013`) is what a member is charged.
+`expectedAmount()` reads it, falls back to what they last paid, and returns null
+if neither exists — a member with no price signal is excluded rather than
+counted as zero. It is stamped on every money path (`activatePendingMember`,
+`addMemberWithPayment`, `recordPayment`, and the amount field in
+`updateMember`), so it stays current without anyone maintaining a price list,
+and the one or two members on a different rate stay right automatically.
+
+**What the schema still cannot answer, so the page does not pretend to:**
+
+- **How a payment was made** — cash / UPI / card is not a column. The owner was
+  asked and chose not to add one, so the page says so in a footnote.
+- **Refunds, discounts, partial payments** — no concept of a balance. The owner
+  ruled out partial payments explicitly.
+- **When a payment was entered.** No `created_at` on `payments`, and `paid_on`
+  defaults to today and is editable, so a backdated correction silently moves
+  money between months. Still the weakest point in the ledger; additive to fix.
+
+Months come from **slicing the ISO string**, not `new Date(...).getMonth()` —
+`paid_on` is date-only, so parsing gives UTC midnight, which is the previous
+month for anyone west of Greenwich. `lib/money.ts` holds that and is tested.
+`page.tsx`'s `paidThisMonth` was the one place still parsing the date; it now
+uses `monthKey` like everything else.
+
+The bars are a div with a width percentage. Six bars do not need a chart
+library, and adding one would be more code than the bars. **Not built on
+shadcn's `dashboard-01`** — it brings Recharts, TanStack Table and a desktop
+sidebar that fights the phone-first bottom nav.
 
 Months come from **slicing the ISO string**, not `new Date(...).getMonth()` —
 `paid_on` is date-only, so parsing gives UTC midnight, which is the previous

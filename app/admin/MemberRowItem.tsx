@@ -41,17 +41,22 @@ const statusStyles: Record<MemberStatus, string> = {
   inactive: "bg-muted text-muted-foreground border border-border/60",
 };
 
-// Plain words, not system words. The owner has no technical background and
-// reads this on a phone: "Payment Incomplete" is a state name, "Not paid" is
-// a fact about a person. Note this splits what used to be one bucket —
-// "Ends soon" was previously folded into "Payment Incomplete", but it needs a
-// different action from the owner (remind, not chase) so it gets its own word.
+// Plain words, not system words — "Payment Incomplete" is a state name, "Ended"
+// is a fact about a person.
+//
+// **This badge answers "can they train today", not "have they paid".** It used
+// to say "Paid" for active, which contradicted itself the moment the fees
+// worklist existed: a member whose term runs to the 19th is active *and* owes
+// this month, so the card read "Paid" directly above "₹2,500 expected". Money
+// is the fees book's question now and it is answered there, per month.
+// `inactive` keeps a money word because it is the one status the owner sets by
+// hand, and he sets it to say the payment did not come.
 const statusLabels: Record<MemberStatus, string> = {
   pending: "Waiting for your OK",
   rejected: "Rejected",
-  active: "Paid",
+  active: "Active",
   expiring_soon: "Ends soon",
-  expired: "Not paid",
+  expired: "Membership ended",
   inactive: "Not paid",
 };
 
@@ -130,6 +135,13 @@ function FeesPanel({
   return (
     <div className="space-y-3">
       <div className="text-sm font-medium">Fees — {member.name}</div>
+      {/* Whether to chase someone depends on whether they still come. A member
+          who has not shown up in a month is a different conversation from one
+          who is here four times a week and forgot to pay. */}
+      <p className="text-[11px] text-muted-foreground -mt-2">
+        Came {member.daysThisMonth} {member.daysThisMonth === 1 ? "day" : "days"} this month ·{" "}
+        {member.daysLastMonth} last month
+      </p>
 
       <form action={handleSubmit} className={stack ? "flex flex-col gap-3" : "flex flex-wrap items-center gap-2"}>
         <label className={stack ? "w-full" : "w-full md:w-auto"}>
@@ -459,18 +471,38 @@ export default function MemberRowItem({
 
         {/* Someone with no payment on file had four facts reading "—" — half
             the card saying nothing. The table keeps its dashes because columns
-            have to line up; a card has no such excuse. */}
+            have to line up; a card has no such excuse.
+
+            In the fees worklist (`note` is set) the card is answering one
+            question — do I chase this person — so it drops to what bears on
+            that: when their term ended, and whether they still turn up. How
+            much and how late is already in the note above. Plan, amount, paid
+            on and tenure are record-keeping, and eight facts per row is what
+            made the list unreadable. */}
         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-          {member.paymentId && (
+          {note ? (
             <>
-              <Fact label="Plan" value={member.planName} />
-              <Fact label="Amount" value={member.amount != null ? member.amount : "—"} />
-              <Fact label="Paid on" value={fmtDate(member.paidOn)} />
               <Fact label="Ends on" value={fmtDate(member.validUntil)} />
+              <Fact label="Last visit" value={lastSeenValue} />
+              <Fact label="Came this month" value={`${member.daysThisMonth} days`} />
+              <Fact label="Came last month" value={`${member.daysLastMonth} days`} />
+            </>
+          ) : (
+            <>
+              {member.paymentId && (
+                <>
+                  <Fact label="Plan" value={member.planName} />
+                  <Fact label="Amount" value={member.amount != null ? member.amount : "—"} />
+                  <Fact label="Paid on" value={fmtDate(member.paidOn)} />
+                  <Fact label="Ends on" value={fmtDate(member.validUntil)} />
+                </>
+              )}
+              <Fact label="Last visit" value={lastSeenValue} />
+              <Fact label="Member for" value={`${member.tenureDays} days`} />
+              <Fact label="Came this month" value={`${member.daysThisMonth} days`} />
+              <Fact label="Came last month" value={`${member.daysLastMonth} days`} />
             </>
           )}
-          <Fact label="Last visit" value={lastSeenValue} />
-          <Fact label="Member for" value={`${member.tenureDays} days`} />
         </div>
 
         <div className="flex gap-2">{actions}</div>
