@@ -298,9 +298,15 @@ function Fact({ label, value }: { label: string; value: ReactNode }) {
 export default function MemberRowItem({
   member,
   layout = "row",
+  note,
+  noteTone = "warn",
 }: {
   member: MemberRow;
   layout?: Layout;
+  /** Why this member is in front of you — the Fees worklist passes how
+   *  overdue they are and what is expected. Card layout only. */
+  note?: string;
+  noteTone?: "warn" | "bad";
 }) {
   const [editing, setEditing] = useState(false);
   const [openingFees, setOpeningFees] = useState(false);
@@ -440,6 +446,16 @@ export default function MemberRowItem({
           </div>
           <StatusBadge member={member} />
         </div>
+
+        {note && (
+          <div
+            className={`text-xs font-medium ${
+              noteTone === "bad" ? "text-destructive" : "text-[oklch(0.85_0.16_85)]"
+            }`}
+          >
+            {note}
+          </div>
+        )}
 
         {/* Someone with no payment on file had four facts reading "—" — half
             the card saying nothing. The table keeps its dashes because columns

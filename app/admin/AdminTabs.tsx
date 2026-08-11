@@ -124,7 +124,7 @@ export default function AdminTabs({
             onGoToPending={() => switchTab("members")}
             onFilterSelect={goToMembersFiltered}
           />
-          <MoneyCard payments={paymentRows} onOpen={() => switchTab("money")} />
+          <MoneyCard payments={paymentRows} members={memberRows} onOpen={() => switchTab("money")} />
           <StatsCards
             totalMembers={totalMembers}
             paidCount={paidCount}
@@ -166,7 +166,7 @@ export default function AdminTabs({
         </div>
       )}
 
-      {tab === "money" && <MoneyTab payments={paymentRows} />}
+      {tab === "money" && <MoneyTab payments={paymentRows} members={memberRows} />}
 
       {tab === "visitors" && (
         <div className="space-y-6">

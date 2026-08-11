@@ -23,6 +23,8 @@ export interface MemberRow {
   paidOn: string | null;
   validUntil: string | null;
   isActiveOverride: boolean | null;
+  /** `collected` on their latest payment — drives the Fees worklist. */
+  latestPaymentCollected: boolean | null;
   status: MemberStatus;
   tenureDays: number;
   lastSeen: string | null;

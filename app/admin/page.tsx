@@ -87,6 +87,7 @@ export default async function AdminDashboard() {
       paidOn: latestPayment?.paid_on ?? null,
       validUntil: latestPayment?.valid_until ?? null,
       isActiveOverride: m.is_active_override ?? null,
+      latestPaymentCollected: latestPayment ? latestPayment.collected : null,
       // Self-signed-up members the owner hasn't approved are "pending", not
       // "expired". Keyed off approved_at rather than "has zero payments" so
       // there is exactly one definition of approved in the app — see

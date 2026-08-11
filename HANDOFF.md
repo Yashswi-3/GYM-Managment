@@ -156,7 +156,40 @@ flow — it just won't send.
 ## The Fees dashboard — done 2026-08-11
 
 A fourth tab (`MoneyTab.tsx`), plus a `MoneyCard` on Overview that taps
-through to it. Totals, last-6-months bars, and a searchable payment list.
+through to it.
+
+**It is a worklist first, a ledger second.** The first version led with
+history, which was the wrong shape: the owner does not open this to read what
+happened, he opens it to collect. Every billing product converges on the same
+answer — Gymdesk's payments card is *scheduled / received / overdue*, Chargebee
+and Stripe age the overdue into buckets, and every element points at a next
+action. So the tab opens on **To collect**, grouped and ordered by who to chase
+first, with the Fees button on each row.
+
+The worklist rows are ordinary `MemberRowItem` cards. Taking payment from the
+worklist is therefore the *same* panel as taking it from the Members tab — a
+second way to record money is a second way to record it wrong.
+
+### The three owed-buckets are disjoint, and that is load-bearing
+
+`lib/dues.ts` puts every member in **exactly one** of:
+
+| Bucket | Meaning |
+|---|---|
+| **Never paid for** | latest payment has `collected = false` — they owe the term they already used |
+| **Overdue** | `valid_until` has passed and the last payment *was* collected |
+| **Due this month** | `valid_until` falls later this calendar month |
+
+`stillToCollect` is the sum of all three, which is only valid because they do
+not overlap. **The first cut got this wrong:** a member past their date whose
+last payment was never collected landed in *both* "overdue" and a separate
+"not taken" banner, billing the same rupees twice while the banner claimed it
+was "counted in neither total". `latestPaymentCollected` is checked first, and
+`dues.test.ts` has a regression test for exactly that member.
+
+A member's expected amount is **what they last paid** — the schema stores no
+plan price. A member with no payment is not a debtor, they are an unapproved
+signup, and is excluded.
 
 **The one rule to not break: every total counts only `collected = true`.**
 A payment row with `collected=false` records what is *owed* — an activation
