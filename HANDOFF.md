@@ -1,10 +1,19 @@
-# Handoff — approval gate, payment truthfulness, mobile rewrite
+# Handoff — approval gate, payment truthfulness, mobile rewrite, fees book
 
-Written 2026-08-11, pushed the same day. The three migrations **were applied to
-the live database by hand before this code was committed**, so the schema is
-ahead of `main`'s history rather than behind it.
+Written 2026-08-11 and shipped the same day across five pushes
+(`44eb3e9..4576683`). The three migrations **were applied to the live database
+by hand before any of this code was committed**, so the schema is ahead of
+`main`'s history rather than behind it.
 
-Read this before touching the admin panel or the check-in flow.
+Read this before touching the admin panel, the check-in flow, or any number
+with a rupee sign in front of it.
+
+**The two rules everything else hangs off:**
+
+1. **Approval is `members.approved_at`** — never "has payment rows".
+2. **Money in counts only `collected = true`; money owed is derived from
+   memberships, never from payment rows.** Mixing those is how the owner's
+   headline number goes wrong, and it has gone wrong twice already.
 
 ---
 
@@ -82,6 +91,12 @@ out of that, and new UI should follow them:
    A control says what happens when it's used.
 3. **One decision per control.** `PlanDuration.tsx` is the pattern: pick a
    term, pick a start date, and the end date is *shown*, not asked for.
+4. **Group controls by what the owner came to do**, not by what the server
+   actions can do. That is the whole of the two-button members row below.
+5. **Never `space-y-*` on a `Card`.** It is `flex flex-col gap-6`, so a
+   `space-y-3` *adds* 12px to the existing 24px instead of replacing it. Set
+   the flex gap (`className="... gap-3"`). This cost 36px per card on every
+   member card before anyone noticed.
 
 `app/admin/NeedsYou.tsx` is the home screen and answers exactly one question —
 what needs the owner today. Rows with a count of zero are dropped rather than
@@ -92,17 +107,31 @@ rendered as "0".
 **Passed:** `tsc --noEmit`, `npm run lint`, a full `next build` from a wiped
 `.next`, and every post-migration row count queried directly.
 
-**Seen rendered at 375px:** `PendingSignups` (in isolation, fixed props), and
-`/join`, `/visit`, `/checkin` — the last against the real dev server, where
-the device check fell through to the mobile form rather than auto-checking in,
-which is the positive signal that `/join` no longer issues a cookie. Every
-input on all three carries a wired `<label>` (`input.labels.length === 1`,
-checked, not assumed) and no page overflows horizontally.
+**Seen rendered at 375px and 1400px:** `/join`, `/visit`, `/checkin` against
+the real dev server — the device check fell through to the mobile form rather
+than auto-checking in, which is the positive signal that `/join` no longer
+issues a cookie; every input carries a wired `<label>`
+(`input.labels.length === 1`, checked, not assumed). And `PendingSignups`,
+`MembersTable` and `MoneyTab` mounted on a throwaway route with fixed props
+covering every status and every owed bucket.
 
-**Still not verified:** the admin panel beyond `PendingSignups`. The Supabase
-clients are untyped (no `Database` generic), so a green build proves nothing
-about column names. Anything touching `approved_at`, `collected`, or
-`rejected_at` is only as correct as the migrations and a careful read.
+**How to do that yourself, because it is the only way to see the admin panel
+without logging in.** Drop a `"use client"` page at `app/preview-tmp/page.tsx`
+that renders the component with hand-written props, look at it, then delete the
+route and confirm it is absent from the `next build` route list.
+
+> **Use Playwright, not the editor's browser pane.** The pane stopped
+> compositing mid-session and every `getBoundingClientRect` silently returned
+> 0 — `document.visibilityState` was `hidden`, which leaves Next's streamed
+> content in its `display:none` container. Chromium is already cached at
+> `~/AppData/Local/ms-playwright`; a ten-line script renders headlessly, takes
+> real screenshots and cannot lie about geometry this way.
+
+**Still not verified:** anything against real data. The Supabase clients are
+untyped (no `Database` generic), so a green build proves nothing about column
+names. Anything touching `approved_at`, `collected`, `rejected_at` or
+`latestPaymentCollected` is only as correct as the migrations and a careful
+read.
 
 Manual pass still owed, at 375px — all of it writes to the live database,
 which is why none of it was done from here:
@@ -145,13 +174,28 @@ flow — it just won't send.
   equivalent bug on the admin path is fixed.
 - **`plan_name` history is inconsistent** — `Month`, `monthly`, `monthly`.
   The term picker stops it spreading but does not clean up what's there.
-- **The test runner is `node --test`, and there is exactly one test.**
-  `npm test`. No dev dependency was added — Node strips the types itself,
-  which is why `allowImportingTsExtensions` is on and why the test imports
-  `./dbError.ts` with the extension. `lib/dbError.test.ts` guards one thing:
-  that Postgres' own wording can never reach a member's screen. It was
-  confirmed to fail when the function is mutated to return `error.message`,
-  so it is not a test that cannot fail.
+- **There is no plan price.** What a member "owes" is taken from what they
+  last paid, which is the only price signal the schema carries. If prices ever
+  differ from the last receipt, every owed figure drifts. A `plan_price`
+  column, or a `plans` table, is the fix — additive either way.
+- **28 pending signups is ~10 screens of scroll**, and the members list has
+  the same shape at 31. Nothing paginates. A "show 10, load more" is a few
+  lines; it has not been done because he has not said the list is a problem.
+- **Nothing is server-paginated either** — `app/admin/page.tsx` selects every
+  member, payment, attendance row and visitor on each load, and ships them all
+  to the client. Fine at 31 members, not at 500.
+- **The test runner is `node --test` and there are 13 tests.** `npm test`. No
+  dev dependency — Node strips the types itself, which is why
+  `allowImportingTsExtensions` is on in `tsconfig.json` and why these files
+  import each other **with the `.ts` extension** (`./money.ts`). Drop the
+  extension and `node --test` stops resolving the module.
+  - `lib/dbError.test.ts` — Postgres' own wording can never reach a member's
+    screen. Confirmed to fail when the function is mutated to return
+    `error.message`, so it is not a test that cannot fail.
+  - `lib/money.test.ts` — month keys, the year-boundary walk, rupee format.
+  - `lib/dues.test.ts` — the owed buckets, including the regression that a
+    member is never billed twice.
+  They cover the money maths, not the UI. There is still no component test.
 
 ## The Fees dashboard — done 2026-08-11
 
@@ -191,16 +235,27 @@ A member's expected amount is **what they last paid** — the schema stores no
 plan price. A member with no payment is not a debtor, they are an unapproved
 signup, and is excluded.
 
-**The one rule to not break: every total counts only `collected = true`.**
-A payment row with `collected=false` records what is *owed* — an activation
-entered as "Payment Not Done" writes one. Summing all rows is exactly the bug
-Phase 1 fixed, in the optimistic direction. Money owed is shown in its own
-banner and is never added to anything.
+**Money in and money owed are computed from different places, on purpose.**
+Money *in* counts payment rows with `collected = true` only — summing all rows
+is the Phase 1 bug again, in the optimistic direction. Money *owed* is derived
+from memberships in `lib/dues.ts` and never from payment rows, which is what
+keeps the buckets disjoint.
+
+The tab has three sections: **To collect** (the worklist, and the default),
+**Received** (the ledger, searchable and month-filterable), and **Trend**
+(six months of bars). The `MoneyCard` on Overview shows collected-this-month
+beside still-to-collect, and its "N late" is `notTaken + overdue` — counting
+only one of those made the card disagree with the tab.
 
 Months come from **slicing the ISO string**, not `new Date(...).getMonth()` —
 `paid_on` is date-only, so parsing gives UTC midnight, which is the previous
 month for anyone west of Greenwich. `lib/money.ts` holds that and is tested
 (`npm test`), including the year-boundary walk in `recentMonthKeys`.
+
+**Not built on shadcn's `dashboard-01`**, which was the obvious thing to copy.
+It brings Recharts, TanStack Table and a desktop sidebar that fights the
+phone-first bottom nav — copying it would have added code, not saved it. The
+pattern was taken; no dependency was.
 
 **What the schema cannot answer, and so the dashboard does not pretend to:**
 
